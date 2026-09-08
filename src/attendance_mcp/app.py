@@ -72,6 +72,91 @@ def create_app(
                 SafeError.for_code("INTERNAL_ERROR").model_dump_json()
             ) from None
 
+    @mcp.tool(
+        name="list_employees",
+        description=(
+            "List active employees for attendance lookups. Inactive employee "
+            "records are excluded. Results use bounded limit/offset pagination."
+        ),
+        annotations={"readOnlyHint": True},
+    )
+    async def list_employees(
+        limit: int = 50, offset: int = 0, ctx: Context | None = None
+    ) -> dict[str, object]:
+        """Map the legacy active-employee page to CRMT REST."""
+        try:
+            return await rest_client.list_employees(
+                headers=_forward_headers(_context_request(ctx)),
+                params={"limit": limit, "offset": offset},
+            )
+        except RestFailure as failure:
+            raise ToolError(failure.error.model_dump_json()) from None
+        except ValueError:
+            raise ToolError(
+                SafeError.for_code("INTERNAL_ERROR").model_dump_json()
+            ) from None
+
+    @mcp.tool(
+        name="get_employee",
+        description="Return one employee's directory-safe metadata by ID.",
+        annotations={"readOnlyHint": True},
+    )
+    async def get_employee(
+        employee_id: int, ctx: Context | None = None
+    ) -> dict[str, object]:
+        """Map the legacy employee lookup to CRMT REST."""
+        try:
+            return await rest_client.get_employee(
+                headers=_forward_headers(_context_request(ctx)), employee_id=employee_id
+            )
+        except RestFailure as failure:
+            raise ToolError(failure.error.model_dump_json()) from None
+        except ValueError:
+            raise ToolError(
+                SafeError.for_code("INTERNAL_ERROR").model_dump_json()
+            ) from None
+
+    @mcp.tool(
+        name="list_punch_types",
+        description=(
+            "List configured punch types and their server-derived attendance locations. "
+            "Locations are reference data, not caller-selected input."
+        ),
+        annotations={"readOnlyHint": True},
+    )
+    async def list_punch_types(
+        active_only: bool = True, ctx: Context | None = None
+    ) -> list[object]:
+        """Map the legacy punch-type lookup to CRMT REST."""
+        try:
+            return await rest_client.list_punch_types(
+                headers=_forward_headers(_context_request(ctx)), active_only=active_only
+            )
+        except RestFailure as failure:
+            raise ToolError(failure.error.model_dump_json()) from None
+        except ValueError:
+            raise ToolError(
+                SafeError.for_code("INTERNAL_ERROR").model_dump_json()
+            ) from None
+
+    @mcp.tool(
+        name="list_locations",
+        description="List attendance-event location reference data.",
+        annotations={"readOnlyHint": True},
+    )
+    async def list_locations(ctx: Context | None = None) -> list[object]:
+        """Map the legacy location lookup to CRMT REST."""
+        try:
+            return await rest_client.list_locations(
+                headers=_forward_headers(_context_request(ctx))
+            )
+        except RestFailure as failure:
+            raise ToolError(failure.error.model_dump_json()) from None
+        except ValueError:
+            raise ToolError(
+                SafeError.for_code("INTERNAL_ERROR").model_dump_json()
+            ) from None
+
     mcp_app = mcp.http_app(path="/mcp", transport="streamable-http", json_response=True)
 
     @asynccontextmanager

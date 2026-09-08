@@ -23,6 +23,30 @@ def app(upstream_requests: list[httpx.Request]):
             return httpx.Response(
                 204, headers={"X-Attendance-API-Contract-Version": "1.0.0"}
             )
+        catalog_payloads: dict[str, object] = {
+            "/api/v1/employees": {
+                "items": [],
+                "limit": 50,
+                "offset": 0,
+                "next_offset": None,
+            },
+            "/api/v1/employees/42": {
+                "employee_id": 42,
+                "first_name": "Ada",
+                "last_name": "Lovelace",
+                "username": "ada",
+                "email": None,
+                "active": 1,
+            },
+            "/api/v1/punch-types": [],
+            "/api/v1/locations": [],
+        }
+        if request.url.path in catalog_payloads:
+            return httpx.Response(
+                200,
+                json=catalog_payloads[request.url.path],
+                headers={"X-Attendance-API-Contract-Version": "1.0.0"},
+            )
         return httpx.Response(
             200,
             json={"items": [], "limit": 50, "offset": 0, "next_offset": None},
@@ -142,3 +166,95 @@ async def test_mcp_rejects_missing_or_malformed_forwarded_headers(app) -> None:
     assert missing.json()["code"] == "AUTHENTICATION_REQUIRED"
     assert malformed.status_code == 400
     assert malformed.json()["code"] == "CORRELATION_ID_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_catalog_tools_preserve_legacy_names_defaults_and_rest_mappings(
+    app, upstream_requests
+) -> None:
+    async with (
+        app.router.lifespan_context(app),
+        httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
+        ) as client,
+    ):
+        initialized = await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "test", "version": "1"},
+                },
+            },
+        )
+        session_headers = {
+            **HEADERS,
+            "Mcp-Session-Id": initialized.headers["Mcp-Session-Id"],
+        }
+        await client.post(
+            "/mcp",
+            headers=session_headers,
+            json={
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized",
+                "params": {},
+            },
+        )
+
+        listed = await client.post(
+            "/mcp",
+            headers=session_headers,
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        )
+        tools = {tool["name"]: tool for tool in listed.json()["result"]["tools"]}
+
+        responses = []
+        for request_id, name, arguments in [
+            (3, "list_employees", {"limit": 50, "offset": 0}),
+            (4, "get_employee", {"employee_id": 42}),
+            (5, "list_punch_types", {"active_only": False}),
+            (6, "list_locations", {}),
+        ]:
+            responses.append(
+                await client.post(
+                    "/mcp",
+                    headers=session_headers,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "method": "tools/call",
+                        "params": {"name": name, "arguments": arguments},
+                    },
+                )
+            )
+
+    assert {
+        "list_employees",
+        "get_employee",
+        "list_punch_types",
+        "list_locations",
+    } <= set(tools)
+    assert (
+        tools["list_employees"]["inputSchema"]["properties"]["limit"]["default"] == 50
+    )
+    assert (
+        tools["list_punch_types"]["inputSchema"]["properties"]["active_only"]["default"]
+        is True
+    )
+    assert all(
+        response.json()["result"].get("isError") is not True for response in responses
+    )
+    assert [request.url.path for request in upstream_requests] == [
+        "/internal/v1/mcp/session-admissions",
+        "/api/v1/employees",
+        "/api/v1/employees/42",
+        "/api/v1/punch-types",
+        "/api/v1/locations",
+    ]
+    assert dict(upstream_requests[1].url.params) == {"limit": "50", "offset": "0"}
+    assert dict(upstream_requests[3].url.params) == {"active_only": "false"}
