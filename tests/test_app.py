@@ -425,6 +425,7 @@ async def test_catalog_includes_read_only_reporting_tools(app) -> None:
         )
 
     names = {tool["name"] for tool in response.json()["result"]["tools"]}
+    assert len(names) == 14
     assert {
         "get_current_attendance",
         "get_employee_attendance_analysis",
