@@ -1,0 +1,20 @@
+{
+  "repo_name": "attendance-mcp",
+  "status": "blocked",
+  "provided_exports": {
+    "interfaces_or_endpoints": [],
+    "events": []
+  },
+  "dependencies_needed": {
+    "attendance_crmt": [
+      "A locally verifiable Attendance CRMT REST v1 implementation and its versioned contract for adapter parity testing"
+    ],
+    "configuration": [
+      "Approved non-secret configuration for the Attendance CRMT REST base URL and adapter runtime"
+    ]
+  },
+  "open_issues_or_blockers": [
+    "No MCP adapter implementation or verified MCP-to-REST parity evidence exists yet.",
+    "No authorized non-production deployment, Entra/OBO, audit, or end-to-end evidence exists; local implementation does not clear these external gates."
+  ]
+}
