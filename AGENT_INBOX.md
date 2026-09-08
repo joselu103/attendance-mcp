@@ -2,22 +2,19 @@
 
 > **Status:** Completed
 >
-> **Objective:** Implement attendance-mcp issue #2: a deployable Streamable HTTP
-> MCP-to-REST adapter with public liveness and the canonical requester attendance
-> tool.
+> **Objective:** Reconcile PR #12 with the catalog-tool changes already merged
+> to `main`, preserving both REST-backed tool sets.
 >
-> **Contract context:** CRMT `POST /internal/v1/mcp/session-admissions` admits
-> sessions without revealing a principal. CRMT
-> `GET /api/v1/me/attendance-events` owns requester identity, authorization,
-> attendance behavior, and safe errors. The adapter forwards exactly one bearer
-> `Authorization` and one UUID `X-Correlation-ID` unchanged.
+> **Contract context:** Preserve MCP contract `1.2.0`; retain the canonical,
+> catalog, and administrative REST mappings while CRMT remains the authority
+> for identity, authorization, auditing, attendance behavior, and safe errors.
 >
-> **Verification:** Add black-box REST-client and MCP Streamable HTTP tests for
-> catalog parity, request mapping, header propagation, safe failures, and
-> liveness. Run the focused suite and all documented repository quality checks.
+> **Verification:** The merge retains both tool sets. `uv run pytest`,
+> `uv run ruff check .`, `uv run ruff format --check .`, and the local Docker
+> build completed successfully.
 >
-> **Definition of done:** The containerized service exposes `/mcp` and `/health`,
-> has no CRMT domain or identity implementation, and has evidence-backed state.
+> **Definition of done:** PR #12 merges cleanly with `main` and includes both
+> catalog and administrative adapter behavior with passing verification.
 
 The repository has been initialized with its agent operating documentation only.
 Before beginning an implementation slice, record an approved, bounded directive

@@ -77,3 +77,95 @@ async def test_rest_client_exposes_only_a_validated_safe_crmt_error() -> None:
 
     assert raised.value.error.code == "BACKEND_UNAVAILABLE"
     assert "diagnostic" not in raised.value.error.model_dump_json()
+
+
+@pytest.mark.asyncio
+async def test_administrative_routes_preserve_safe_crmt_failures() -> None:
+    failures = {
+        "/api/v1/employees/42/attendance-events": (403, "FORBIDDEN"),
+        "/api/v1/attendance-events/100": (404, "NOT_FOUND"),
+        "/api/v1/employees/42/daily-attendance": (400, "INVALID_ARGUMENT"),
+        "/api/v1/employees/42/planned-work": (503, "BACKEND_UNAVAILABLE"),
+    }
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        status_code, code = failures[request.url.path]
+        return httpx.Response(
+            status_code,
+            json={
+                "code": code,
+                "message": {
+                    "FORBIDDEN": "You do not have permission to do that.",
+                    "NOT_FOUND": "The requested attendance resource was not found.",
+                    "INVALID_ARGUMENT": "Check the attendance date range and pagination values and try again.",
+                    "BACKEND_UNAVAILABLE": "Attendance is temporarily unavailable. Please try again shortly.",
+                }[code],
+            },
+            headers={"X-Attendance-API-Contract-Version": "1.0.0"},
+        )
+
+    headers = {
+        "Authorization": "Bearer delegated-token",
+        "X-Correlation-ID": "11111111-1111-1111-1111-111111111111",
+    }
+    async with httpx.AsyncClient(
+        base_url="https://crmt.example", transport=httpx.MockTransport(handler)
+    ) as http_client:
+        client = CrmtRestClient(client=http_client)
+        operations = [
+            client.list_attendance_events(employee_id=42, headers=headers, params={}),
+            client.get_attendance_event(attendance_event_id=100, headers=headers),
+            client.get_daily_attendance(employee_id=42, headers=headers, params={}),
+            client.get_planned_work(employee_id=42, headers=headers, params={}),
+        ]
+        for operation, (_, expected_code) in zip(
+            operations, failures.values(), strict=True
+        ):
+            with pytest.raises(RestFailure) as raised:
+                await operation
+            assert raised.value.error.code == expected_code
+
+
+@pytest.mark.asyncio
+async def test_catalog_routes_preserve_arguments_and_forward_only_allowed_headers() -> (
+    None
+):
+    received: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        received.append(request)
+        payload: object = (
+            []
+            if request.url.path in {"/api/v1/punch-types", "/api/v1/locations"}
+            else {"items": []}
+        )
+        return httpx.Response(
+            200,
+            json=payload,
+            headers={"X-Attendance-API-Contract-Version": "1.0.0"},
+        )
+
+    headers = {
+        "Authorization": "Bearer delegated-token",
+        "X-Correlation-ID": "11111111-1111-1111-1111-111111111111",
+        "X-Caller-Controlled": "must-not-forward",
+    }
+    async with httpx.AsyncClient(
+        base_url="https://crmt.example", transport=httpx.MockTransport(handler)
+    ) as http_client:
+        client = CrmtRestClient(client=http_client)
+        await client.list_employees(headers=headers, params={"limit": 25, "offset": 3})
+        await client.get_employee(headers=headers, employee_id=42)
+        await client.list_punch_types(headers=headers, active_only=False)
+        await client.list_locations(headers=headers)
+
+    assert [(request.url.path, dict(request.url.params)) for request in received] == [
+        ("/api/v1/employees", {"limit": "25", "offset": "3"}),
+        ("/api/v1/employees/42", {}),
+        ("/api/v1/punch-types", {"active_only": "false"}),
+        ("/api/v1/locations", {}),
+    ]
+    for request in received:
+        assert request.headers["authorization"] == headers["Authorization"]
+        assert request.headers["x-correlation-id"] == headers["X-Correlation-ID"]
+        assert "x-caller-controlled" not in request.headers

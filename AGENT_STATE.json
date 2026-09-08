@@ -5,7 +5,15 @@
     "interfaces_or_endpoints": [
       "GET /health public liveness",
       "POST /mcp Streamable HTTP MCP endpoint",
-      "list_my_attendance_events(start_date, end_date, limit=50, offset=0)"
+      "list_my_attendance_events(start_date, end_date, limit=50, offset=0)",
+      "list_employees(limit=50, offset=0)",
+      "get_employee(employee_id)",
+      "list_punch_types(active_only=true)",
+      "list_locations()",
+      "list_attendance_events(employee_id, start_date, end_date, limit=50, offset=0)",
+      "get_attendance_event(attendance_event_id)",
+      "get_daily_attendance(employee_id, day)",
+      "get_planned_work(employee_id, start_date, end_date)"
     ],
     "events": []
   },
@@ -18,8 +26,8 @@
     ]
   },
   "open_issues_or_blockers": [
-    "Local adapter tests verify the canonical requester tool route/argument mapping, allowed header propagation, CRMT safe-error filtering, session admission, and public liveness.",
-    "The local Docker image attendance-mcp:local-test builds successfully.",
+    "Nine local adapter tests verify canonical requester, catalog, and administrative tool route/argument mapping, legacy date schemas and descriptions, MCP contract-version headers, allowed header propagation, CRMT safe-error filtering, session admission, and public liveness.",
+    "The local Docker image attendance-mcp:local-test builds successfully from the merged adapter source.",
     "No authorized non-production deployment, Entra/OBO, audit, or end-to-end evidence exists; local implementation does not clear these external gates."
   ]
 }
