@@ -2,19 +2,26 @@
 
 > **Status:** Completed
 >
-> **Objective:** Reconcile the latest `main` with issue #5, preserving the
-> canonical, catalog, administrative, and reporting REST-backed tool sets.
+> **Objective:** Complete the repository-owned verification and publication
+> work for attendance-mcp#6: prove the standalone adapter's legacy MCP catalog,
+> Streamable HTTP behavior, header/correlation forwarding, and safe-error
+> behavior against the accepted CRMT REST v1 contract; publish its public
+> ownership and migration contract.
 >
 > **Contract context:** Preserve MCP contract `1.2.0`; retain the canonical,
-> catalog, administrative, and reporting REST mappings while CRMT remains the authority
-> for identity, authorization, auditing, attendance behavior, and safe errors.
+> catalog, administrative, and reporting REST mappings while CRMT remains the
+> authority for identity, authorization, auditing, attendance behavior, and
+> safe errors. The adapter must forward only the delegated bearer and UUID
+> correlation ID unchanged.
 >
-> **Verification:** The merge retains both tool sets. `uv run pytest`,
-> `uv run ruff check .`, `uv run ruff format --check .`, and the local Docker
-> build completed successfully.
+> **Verification:** The MCP/REST black-box catalog coverage and published
+> migration contract were verified with `uv run pytest` (11 passed), `uv run
+> ruff check .`, `uv run ruff format --check .`, and the local Docker build.
 >
-> **Definition of done:** This branch includes all fourteen read-only REST-backed
-> tools with passing verification.
+> **Definition of done:** Complete for repository-owned documentation and local
+> fourteen-tool contract verification. Cross-service comparison of CRMT audit
+> records remains explicitly blocked until an authorized CRMT integration
+> environment is made available.
 
 The repository has been initialized with its agent operating documentation only.
 Before beginning an implementation slice, record an approved, bounded directive
