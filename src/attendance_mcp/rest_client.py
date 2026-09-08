@@ -33,9 +33,57 @@ class CrmtRestClient:
     async def list_my_attendance_events(
         self, *, headers: Mapping[str, str], params: Mapping[str, object]
     ) -> dict[str, object]:
-        return await self._get_json(
+        return await self._get_object(
             "/api/v1/me/attendance-events", headers=headers, params=params
         )
+
+    async def list_employees(
+        self, *, headers: Mapping[str, str], params: Mapping[str, object]
+    ) -> dict[str, object]:
+        return await self._get_object(
+            "/api/v1/employees", headers=headers, params=params
+        )
+
+    async def get_employee(
+        self, *, headers: Mapping[str, str], employee_id: int
+    ) -> dict[str, object]:
+        return await self._get_object(
+            f"/api/v1/employees/{employee_id}", headers=headers
+        )
+
+    async def list_punch_types(
+        self, *, headers: Mapping[str, str], active_only: bool
+    ) -> list[object]:
+        return await self._get_list(
+            "/api/v1/punch-types", headers=headers, params={"active_only": active_only}
+        )
+
+    async def list_locations(self, *, headers: Mapping[str, str]) -> list[object]:
+        return await self._get_list("/api/v1/locations", headers=headers)
+
+    async def _get_object(
+        self,
+        path: str,
+        *,
+        headers: Mapping[str, str],
+        params: Mapping[str, object] | None = None,
+    ) -> dict[str, object]:
+        value = await self._get_json(path, headers=headers, params=params)
+        if not isinstance(value, dict):
+            raise RestFailure(SafeError.for_code("BACKEND_UNAVAILABLE"))
+        return value
+
+    async def _get_list(
+        self,
+        path: str,
+        *,
+        headers: Mapping[str, str],
+        params: Mapping[str, object] | None = None,
+    ) -> list[object]:
+        value = await self._get_json(path, headers=headers, params=params)
+        if not isinstance(value, list):
+            raise RestFailure(SafeError.for_code("BACKEND_UNAVAILABLE"))
+        return value
 
     async def list_attendance_events(
         self,
@@ -44,7 +92,7 @@ class CrmtRestClient:
         headers: Mapping[str, str],
         params: Mapping[str, object],
     ) -> dict[str, object]:
-        return await self._get_json(
+        return await self._get_object(
             f"/api/v1/employees/{employee_id}/attendance-events",
             headers=headers,
             params=params,
@@ -53,7 +101,7 @@ class CrmtRestClient:
     async def get_attendance_event(
         self, *, attendance_event_id: int, headers: Mapping[str, str]
     ) -> dict[str, object]:
-        return await self._get_json(
+        return await self._get_object(
             f"/api/v1/attendance-events/{attendance_event_id}", headers=headers
         )
 
@@ -64,7 +112,7 @@ class CrmtRestClient:
         headers: Mapping[str, str],
         params: Mapping[str, object],
     ) -> dict[str, object]:
-        return await self._get_json(
+        return await self._get_object(
             f"/api/v1/employees/{employee_id}/daily-attendance",
             headers=headers,
             params=params,
@@ -77,7 +125,7 @@ class CrmtRestClient:
         headers: Mapping[str, str],
         params: Mapping[str, object],
     ) -> dict[str, object]:
-        return await self._get_json(
+        return await self._get_object(
             f"/api/v1/employees/{employee_id}/planned-work",
             headers=headers,
             params=params,
@@ -89,14 +137,12 @@ class CrmtRestClient:
         *,
         headers: Mapping[str, str],
         params: Mapping[str, object] | None = None,
-    ) -> dict[str, object]:
+    ) -> object:
         response = await self._request("GET", path, headers=headers, params=params)
         try:
             value = response.json()
         except ValueError:
             raise RestFailure(SafeError.for_code("BACKEND_UNAVAILABLE")) from None
-        if not isinstance(value, dict):
-            raise RestFailure(SafeError.for_code("BACKEND_UNAVAILABLE"))
         return value
 
     async def aclose(self) -> None:

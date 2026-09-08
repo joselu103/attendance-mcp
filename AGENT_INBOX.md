@@ -1,6 +1,6 @@
 # Current Directive
 
-> **Status:** In progress
+> **Status:** Completed
 >
 > **Objective:** Reconcile PR #12 with the catalog-tool changes already merged
 > to `main`, preserving both REST-backed tool sets.
@@ -9,8 +9,9 @@
 > catalog, and administrative REST mappings while CRMT remains the authority
 > for identity, authorization, auditing, attendance behavior, and safe errors.
 >
-> **Verification:** Resolve the integration conflict, run the complete
-> repository test and quality suite, and update PR #12 with the merge result.
+> **Verification:** The merge retains both tool sets. `uv run pytest`,
+> `uv run ruff check .`, `uv run ruff format --check .`, and the local Docker
+> build completed successfully.
 >
 > **Definition of done:** PR #12 merges cleanly with `main` and includes both
 > catalog and administrative adapter behavior with passing verification.
