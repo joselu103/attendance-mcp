@@ -2,24 +2,19 @@
 
 > **Status:** Completed
 >
-> **Objective:** Implement attendance-mcp issue #3: map the four legacy catalog
-> MCP tools to their Attendance CRMT REST v1 operations.
+> **Objective:** Reconcile PR #12 with the catalog-tool changes already merged
+> to `main`, preserving both REST-backed tool sets.
 >
-> **Contract context:** CRMT owns delegated-token validation, requester identity,
-> authorization, audit, catalog behavior, and safe errors. The adapter forwards
-> exactly one bearer `Authorization` and one UUID `X-Correlation-ID` unchanged
-> to `GET /api/v1/employees`, `GET /api/v1/employees/{employee_id}`,
-> `GET /api/v1/punch-types`, and `GET /api/v1/locations`.
+> **Contract context:** Preserve MCP contract `1.2.0`; retain the canonical,
+> catalog, and administrative REST mappings while CRMT remains the authority
+> for identity, authorization, auditing, attendance behavior, and safe errors.
 >
-> **Verification:** Add black-box REST-client and MCP Streamable HTTP tests for
-> catalog tool parity, route and argument mapping, allowed-header propagation,
-> safe failures, and secret-safe error translation. Run focused tests and all
-> documented repository quality checks.
+> **Verification:** The merge retains both tool sets. `uv run pytest`,
+> `uv run ruff check .`, `uv run ruff format --check .`, and the local Docker
+> build completed successfully.
 >
-> **Definition of done:** `list_employees`, `get_employee`, `list_punch_types`,
-> and `list_locations` retain their legacy MCP contracts while delegating only to
-> CRMT REST through the single REST-client seam; repository checks pass and state
-> records direct local evidence.
+> **Definition of done:** PR #12 merges cleanly with `main` and includes both
+> catalog and administrative adapter behavior with passing verification.
 
 The repository has been initialized with its agent operating documentation only.
 Before beginning an implementation slice, record an approved, bounded directive

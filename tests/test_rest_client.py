@@ -67,16 +67,63 @@ async def test_rest_client_exposes_only_a_validated_safe_crmt_error() -> None:
         base_url="https://crmt.example", transport=httpx.MockTransport(handler)
     ) as http_client:
         with pytest.raises(RestFailure) as raised:
-            await CrmtRestClient(client=http_client).list_employees(
+            await CrmtRestClient(client=http_client).list_my_attendance_events(
                 headers={
                     "Authorization": "Bearer delegated-token",
                     "X-Correlation-ID": "11111111-1111-1111-1111-111111111111",
                 },
-                params={"limit": 50, "offset": 0},
+                params={},
             )
 
     assert raised.value.error.code == "BACKEND_UNAVAILABLE"
     assert "diagnostic" not in raised.value.error.model_dump_json()
+
+
+@pytest.mark.asyncio
+async def test_administrative_routes_preserve_safe_crmt_failures() -> None:
+    failures = {
+        "/api/v1/employees/42/attendance-events": (403, "FORBIDDEN"),
+        "/api/v1/attendance-events/100": (404, "NOT_FOUND"),
+        "/api/v1/employees/42/daily-attendance": (400, "INVALID_ARGUMENT"),
+        "/api/v1/employees/42/planned-work": (503, "BACKEND_UNAVAILABLE"),
+    }
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        status_code, code = failures[request.url.path]
+        return httpx.Response(
+            status_code,
+            json={
+                "code": code,
+                "message": {
+                    "FORBIDDEN": "You do not have permission to do that.",
+                    "NOT_FOUND": "The requested attendance resource was not found.",
+                    "INVALID_ARGUMENT": "Check the attendance date range and pagination values and try again.",
+                    "BACKEND_UNAVAILABLE": "Attendance is temporarily unavailable. Please try again shortly.",
+                }[code],
+            },
+            headers={"X-Attendance-API-Contract-Version": "1.0.0"},
+        )
+
+    headers = {
+        "Authorization": "Bearer delegated-token",
+        "X-Correlation-ID": "11111111-1111-1111-1111-111111111111",
+    }
+    async with httpx.AsyncClient(
+        base_url="https://crmt.example", transport=httpx.MockTransport(handler)
+    ) as http_client:
+        client = CrmtRestClient(client=http_client)
+        operations = [
+            client.list_attendance_events(employee_id=42, headers=headers, params={}),
+            client.get_attendance_event(attendance_event_id=100, headers=headers),
+            client.get_daily_attendance(employee_id=42, headers=headers, params={}),
+            client.get_planned_work(employee_id=42, headers=headers, params={}),
+        ]
+        for operation, (_, expected_code) in zip(
+            operations, failures.values(), strict=True
+        ):
+            with pytest.raises(RestFailure) as raised:
+                await operation
+            assert raised.value.error.code == expected_code
 
 
 @pytest.mark.asyncio

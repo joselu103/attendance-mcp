@@ -2,6 +2,7 @@
 
 import json
 from contextlib import asynccontextmanager
+from datetime import date
 from typing import Any
 from uuid import UUID
 
@@ -24,6 +25,7 @@ from attendance_mcp.rest_client import (
 from attendance_mcp.settings import Settings
 
 MCP_CONTRACT_VERSION = "1.2.0"
+MCP_CONTRACT_VERSION_HEADER = "X-Attendance-MCP-Contract-Version"
 
 
 def create_app(
@@ -43,12 +45,15 @@ def create_app(
 
     @mcp.tool(
         name="list_my_attendance_events",
-        description="List the authenticated requester's attendance events.",
-        annotations={"readOnlyHint": True},
+        description=(
+            "List the requesting employee's attendance events over one through 31 "
+            "inclusive calendar days. Employee identity is resolved by the server; "
+            "limit must be from 1 through 100 and offset must be nonnegative."
+        ),
     )
     async def list_my_attendance_events(
-        start_date: str,
-        end_date: str,
+        start_date: date,
+        end_date: date,
         limit: int = 50,
         offset: int = 0,
         ctx: Context | None = None,
@@ -78,7 +83,6 @@ def create_app(
             "List active employees for attendance lookups. Inactive employee "
             "records are excluded. Results use bounded limit/offset pagination."
         ),
-        annotations={"readOnlyHint": True},
     )
     async def list_employees(
         limit: int = 50, offset: int = 0, ctx: Context | None = None
@@ -99,7 +103,6 @@ def create_app(
     @mcp.tool(
         name="get_employee",
         description="Return one employee's directory-safe metadata by ID.",
-        annotations={"readOnlyHint": True},
     )
     async def get_employee(
         employee_id: int, ctx: Context | None = None
@@ -122,7 +125,6 @@ def create_app(
             "List configured punch types and their server-derived attendance locations. "
             "Locations are reference data, not caller-selected input."
         ),
-        annotations={"readOnlyHint": True},
     )
     async def list_punch_types(
         active_only: bool = True, ctx: Context | None = None
@@ -142,13 +144,117 @@ def create_app(
     @mcp.tool(
         name="list_locations",
         description="List attendance-event location reference data.",
-        annotations={"readOnlyHint": True},
     )
     async def list_locations(ctx: Context | None = None) -> list[object]:
         """Map the legacy location lookup to CRMT REST."""
         try:
             return await rest_client.list_locations(
                 headers=_forward_headers(_context_request(ctx))
+            )
+        except RestFailure as failure:
+            raise ToolError(failure.error.model_dump_json()) from None
+        except ValueError:
+            raise ToolError(
+                SafeError.for_code("INTERNAL_ERROR").model_dump_json()
+            ) from None
+
+    @mcp.tool(
+        name="list_attendance_events",
+        description=(
+            "List one employee's attendance events in a bounded date range. "
+            "This MVP tool is available only to the server-configured admin requester."
+        ),
+    )
+    async def list_attendance_events(
+        employee_id: int,
+        start_date: date,
+        end_date: date,
+        limit: int = 50,
+        offset: int = 0,
+        ctx: Context | None = None,
+    ) -> dict[str, object]:
+        """Map the legacy administrator event list directly to CRMT REST."""
+        try:
+            return await rest_client.list_attendance_events(
+                employee_id=employee_id,
+                headers=_forward_headers(_context_request(ctx)),
+                params={
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "limit": limit,
+                    "offset": offset,
+                },
+            )
+        except RestFailure as failure:
+            raise ToolError(failure.error.model_dump_json()) from None
+        except ValueError:
+            raise ToolError(
+                SafeError.for_code("INTERNAL_ERROR").model_dump_json()
+            ) from None
+
+    @mcp.tool(
+        name="get_attendance_event",
+        description="Return one attendance event, including recorded audit metadata.",
+    )
+    async def get_attendance_event(
+        attendance_event_id: int, ctx: Context | None = None
+    ) -> dict[str, object]:
+        """Map the legacy administrator event detail directly to CRMT REST."""
+        try:
+            return await rest_client.get_attendance_event(
+                attendance_event_id=attendance_event_id,
+                headers=_forward_headers(_context_request(ctx)),
+            )
+        except RestFailure as failure:
+            raise ToolError(failure.error.model_dump_json()) from None
+        except ValueError:
+            raise ToolError(
+                SafeError.for_code("INTERNAL_ERROR").model_dump_json()
+            ) from None
+
+    @mcp.tool(
+        name="get_daily_attendance",
+        description=(
+            "Return one employee's local-calendar daily attendance events and "
+            "calculated planned-versus-logged outcome."
+        ),
+    )
+    async def get_daily_attendance(
+        employee_id: int, day: date, ctx: Context | None = None
+    ) -> dict[str, object]:
+        """Map the legacy daily administrator view directly to CRMT REST."""
+        try:
+            return await rest_client.get_daily_attendance(
+                employee_id=employee_id,
+                headers=_forward_headers(_context_request(ctx)),
+                params={"day": day},
+            )
+        except RestFailure as failure:
+            raise ToolError(failure.error.model_dump_json()) from None
+        except ValueError:
+            raise ToolError(
+                SafeError.for_code("INTERNAL_ERROR").model_dump_json()
+            ) from None
+
+    @mcp.tool(
+        name="get_planned_work",
+        description=(
+            "Return recorded daily planned-work hours for one employee over an "
+            "inclusive Europe/Ljubljana range of up to 31 calendar days."
+        ),
+    )
+    async def get_planned_work(
+        employee_id: int,
+        start_date: date,
+        end_date: date,
+        ctx: Context | None = None,
+    ) -> dict[str, object]:
+        """Map the legacy planned-work administrator view directly to CRMT REST."""
+        try:
+            return await rest_client.get_planned_work(
+                employee_id=employee_id,
+                headers=_forward_headers(_context_request(ctx)),
+                params={"start_date": start_date, "end_date": end_date},
             )
         except RestFailure as failure:
             raise ToolError(failure.error.model_dump_json()) from None
@@ -176,6 +282,7 @@ def create_app(
         lifespan=lifespan,
     )
     app.add_middleware(_AdmissionMiddleware, rest_client=rest_client)
+    app.add_middleware(_McpContractVersionMiddleware)
     return app
 
 
@@ -258,6 +365,36 @@ class _AdmissionMiddleware:
             return {"type": "http.request", "body": body, "more_body": False}
 
         await self._app(scope, replay, send)
+
+
+class _McpContractVersionMiddleware:
+    """Publish the frozen MCP contract version on every MCP HTTP response."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["path"] != "/mcp":
+            await self._app(scope, receive, send)
+            return
+
+        async def send_with_contract_version(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = [
+                    (name, value)
+                    for name, value in message.get("headers", [])
+                    if name.lower() != MCP_CONTRACT_VERSION_HEADER.lower().encode()
+                ]
+                headers.append(
+                    (
+                        MCP_CONTRACT_VERSION_HEADER.lower().encode(),
+                        MCP_CONTRACT_VERSION.encode(),
+                    )
+                )
+                message["headers"] = headers
+            await send(message)
+
+        await self._app(scope, receive, send_with_contract_version)
 
 
 def _is_initialize(body: bytes) -> bool:

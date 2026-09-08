@@ -28,7 +28,7 @@ SAFE_MESSAGES: dict[SafeErrorCode, str] = {
     "IDENTITY_AMBIGUOUS": "Your Teams account cannot be linked safely. Contact an administrator.",
     "INVALID_ARGUMENT": "Check the attendance date range and pagination values and try again.",
     "FORBIDDEN": "You do not have permission to do that.",
-    "NOT_FOUND": "The requested attendance record was not found.",
+    "NOT_FOUND": "The requested attendance resource was not found.",
     "BACKEND_UNAVAILABLE": "Attendance is temporarily unavailable. Please try again shortly.",
     "INTERNAL_ERROR": "Attendance could not complete that request.",
 }
