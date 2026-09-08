@@ -1,22 +1,19 @@
 # Current Directive
 
-> **Status:** Completed
+> **Status:** In progress
 >
-> **Objective:** Resolve standalone adapter wire incompatibilities with the
-> current Attendance CRMT embedded MCP bridge.
+> **Objective:** Reconcile PR #12 with the catalog-tool changes already merged
+> to `main`, preserving both REST-backed tool sets.
 >
-> **Contract context:** Preserve MCP contract `1.2.0`, including legacy date
-> schemas and `X-Attendance-MCP-Contract-Version` responses. CRMT remains the
-> authority for identity, authorization, auditing, attendance behavior, and
-> safe errors.
+> **Contract context:** Preserve MCP contract `1.2.0`; retain the canonical,
+> catalog, and administrative REST mappings while CRMT remains the authority
+> for identity, authorization, auditing, attendance behavior, and safe errors.
 >
-> **Verification:** Black-box MCP catalog and HTTP checks verify date schemas
-> and contract-version response headers. `uv run pytest`, `uv run ruff check .`,
-> `uv run ruff format --check .`, and the local Docker build completed
-> successfully.
+> **Verification:** Resolve the integration conflict, run the complete
+> repository test and quality suite, and update PR #12 with the merge result.
 >
-> **Definition of done:** The adapter's inherited MCP schemas and HTTP contract
-> match CRMT's published bridge behavior without adding CRMT domain logic.
+> **Definition of done:** PR #12 merges cleanly with `main` and includes both
+> catalog and administrative adapter behavior with passing verification.
 
 The repository has been initialized with its agent operating documentation only.
 Before beginning an implementation slice, record an approved, bounded directive
