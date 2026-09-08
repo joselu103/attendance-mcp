@@ -32,7 +32,8 @@ Load task-specific guidance:
 ### Issue tracker
 
 Issues and specifications are tracked in this repository's GitHub Issues. See
-`docs/agents/issue-tracker.md`.
+`docs/agents/issue-tracker.md` and the
+[agent and issue-navigation guide](docs/agents/agent-and-issue-navigation.md).
 
 ### Triage labels
 
