@@ -33,9 +33,64 @@ class CrmtRestClient:
     async def list_my_attendance_events(
         self, *, headers: Mapping[str, str], params: Mapping[str, object]
     ) -> dict[str, object]:
-        response = await self._request(
-            "GET", "/api/v1/me/attendance-events", headers=headers, params=params
+        return await self._get_json(
+            "/api/v1/me/attendance-events", headers=headers, params=params
         )
+
+    async def list_attendance_events(
+        self,
+        *,
+        employee_id: int,
+        headers: Mapping[str, str],
+        params: Mapping[str, object],
+    ) -> dict[str, object]:
+        return await self._get_json(
+            f"/api/v1/employees/{employee_id}/attendance-events",
+            headers=headers,
+            params=params,
+        )
+
+    async def get_attendance_event(
+        self, *, attendance_event_id: int, headers: Mapping[str, str]
+    ) -> dict[str, object]:
+        return await self._get_json(
+            f"/api/v1/attendance-events/{attendance_event_id}", headers=headers
+        )
+
+    async def get_daily_attendance(
+        self,
+        *,
+        employee_id: int,
+        headers: Mapping[str, str],
+        params: Mapping[str, object],
+    ) -> dict[str, object]:
+        return await self._get_json(
+            f"/api/v1/employees/{employee_id}/daily-attendance",
+            headers=headers,
+            params=params,
+        )
+
+    async def get_planned_work(
+        self,
+        *,
+        employee_id: int,
+        headers: Mapping[str, str],
+        params: Mapping[str, object],
+    ) -> dict[str, object]:
+        return await self._get_json(
+            f"/api/v1/employees/{employee_id}/planned-work",
+            headers=headers,
+            params=params,
+        )
+
+    async def _get_json(
+        self,
+        path: str,
+        *,
+        headers: Mapping[str, str],
+        params: Mapping[str, object] | None = None,
+    ) -> dict[str, object]:
+        response = await self._request("GET", path, headers=headers, params=params)
         try:
             value = response.json()
         except ValueError:
