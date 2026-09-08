@@ -1,6 +1,23 @@
 # Current Directive
 
-> **Status:** No active implementation directive.
+> **Status:** Completed
+>
+> **Objective:** Implement attendance-mcp issue #2: a deployable Streamable HTTP
+> MCP-to-REST adapter with public liveness and the canonical requester attendance
+> tool.
+>
+> **Contract context:** CRMT `POST /internal/v1/mcp/session-admissions` admits
+> sessions without revealing a principal. CRMT
+> `GET /api/v1/me/attendance-events` owns requester identity, authorization,
+> attendance behavior, and safe errors. The adapter forwards exactly one bearer
+> `Authorization` and one UUID `X-Correlation-ID` unchanged.
+>
+> **Verification:** Add black-box REST-client and MCP Streamable HTTP tests for
+> catalog parity, request mapping, header propagation, safe failures, and
+> liveness. Run the focused suite and all documented repository quality checks.
+>
+> **Definition of done:** The containerized service exposes `/mcp` and `/health`,
+> has no CRMT domain or identity implementation, and has evidence-backed state.
 
 The repository has been initialized with its agent operating documentation only.
 Before beginning an implementation slice, record an approved, bounded directive

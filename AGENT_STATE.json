@@ -1,8 +1,12 @@
 {
   "repo_name": "attendance-mcp",
-  "status": "blocked",
+  "status": "implemented_locally",
   "provided_exports": {
-    "interfaces_or_endpoints": [],
+    "interfaces_or_endpoints": [
+      "GET /health public liveness",
+      "POST /mcp Streamable HTTP MCP endpoint",
+      "list_my_attendance_events(start_date, end_date, limit=50, offset=0)"
+    ],
     "events": []
   },
   "dependencies_needed": {
@@ -14,7 +18,8 @@
     ]
   },
   "open_issues_or_blockers": [
-    "No MCP adapter implementation or verified MCP-to-REST parity evidence exists yet.",
+    "Local adapter tests verify the canonical requester tool route/argument mapping, allowed header propagation, CRMT safe-error filtering, session admission, and public liveness.",
+    "The local Docker image attendance-mcp:local-test builds successfully.",
     "No authorized non-production deployment, Entra/OBO, audit, or end-to-end evidence exists; local implementation does not clear these external gates."
   ]
 }
