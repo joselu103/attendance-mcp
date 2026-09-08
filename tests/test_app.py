@@ -391,3 +391,44 @@ async def test_catalog_tools_preserve_legacy_names_defaults_and_rest_mappings(
     ]
     assert dict(upstream_requests[1].url.params) == {"limit": "50", "offset": "0"}
     assert dict(upstream_requests[3].url.params) == {"active_only": "false"}
+
+
+@pytest.mark.asyncio
+async def test_catalog_includes_read_only_reporting_tools(app) -> None:
+    async with (
+        app.router.lifespan_context(app),
+        httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
+        ) as client,
+    ):
+        initialized = await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "test", "version": "1"},
+                },
+            },
+        )
+        response = await client.post(
+            "/mcp",
+            headers={
+                **HEADERS,
+                "Mcp-Session-Id": initialized.headers["Mcp-Session-Id"],
+            },
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        )
+
+    names = {tool["name"] for tool in response.json()["result"]["tools"]}
+    assert {
+        "get_current_attendance",
+        "get_employee_attendance_analysis",
+        "get_employee_attendance_summary",
+        "get_exceptions",
+        "get_organization_attendance_analysis",
+    } <= names

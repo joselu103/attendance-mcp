@@ -2,8 +2,8 @@
 
 import json
 from contextlib import asynccontextmanager
-from datetime import date
-from typing import Any
+from datetime import date, datetime
+from typing import Any, Literal
 from uuid import UUID
 
 import httpx
@@ -263,6 +263,112 @@ def create_app(
                 SafeError.for_code("INTERNAL_ERROR").model_dump_json()
             ) from None
 
+    @mcp.tool(name="get_current_attendance", annotations={"readOnlyHint": True})
+    async def get_current_attendance(
+        as_of: datetime | None = None,
+        status: Literal[
+            "office",
+            "remote",
+            "customer_site",
+            "break",
+            "absence",
+            "no_status",
+            "unknown",
+        ]
+        | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        ctx: Context | None = None,
+    ) -> dict[str, object]:
+        return await _reporting_call(
+            ctx,
+            lambda headers: rest_client.get_current_attendance(
+                headers=headers,
+                params=_defined_params(
+                    as_of=as_of.isoformat() if as_of else None,
+                    status=status,
+                    limit=limit,
+                    offset=offset,
+                ),
+            ),
+        )
+
+    @mcp.tool(
+        name="get_employee_attendance_analysis", annotations={"readOnlyHint": True}
+    )
+    async def get_employee_attendance_analysis(
+        employee_id: int, start_date: date, end_date: date, ctx: Context | None = None
+    ) -> dict[str, object]:
+        return await _reporting_call(
+            ctx,
+            lambda headers: rest_client.get_employee_attendance_analysis(
+                employee_id=employee_id,
+                headers=headers,
+                params={"start_date": start_date, "end_date": end_date},
+            ),
+        )
+
+    @mcp.tool(
+        name="get_employee_attendance_summary", annotations={"readOnlyHint": True}
+    )
+    async def get_employee_attendance_summary(
+        employee_id: int, start_date: date, end_date: date, ctx: Context | None = None
+    ) -> dict[str, object]:
+        return await _reporting_call(
+            ctx,
+            lambda headers: rest_client.get_employee_attendance_summary(
+                employee_id=employee_id,
+                headers=headers,
+                params={"start_date": start_date, "end_date": end_date},
+            ),
+        )
+
+    @mcp.tool(name="get_exceptions", annotations={"readOnlyHint": True})
+    async def get_exceptions(
+        start_date: date,
+        end_date: date,
+        employee_ids: list[int] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        ctx: Context | None = None,
+    ) -> dict[str, object]:
+        return await _reporting_call(
+            ctx,
+            lambda headers: rest_client.get_exceptions(
+                headers=headers,
+                params=_defined_params(
+                    start_date=start_date,
+                    end_date=end_date,
+                    employee_ids=employee_ids,
+                    limit=limit,
+                    offset=offset,
+                ),
+            ),
+        )
+
+    @mcp.tool(
+        name="get_organization_attendance_analysis", annotations={"readOnlyHint": True}
+    )
+    async def get_organization_attendance_analysis(
+        start_date: date,
+        end_date: date,
+        limit: int = 50,
+        offset: int = 0,
+        ctx: Context | None = None,
+    ) -> dict[str, object]:
+        return await _reporting_call(
+            ctx,
+            lambda headers: rest_client.get_organization_attendance_analysis(
+                headers=headers,
+                params={
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "limit": limit,
+                    "offset": offset,
+                },
+            ),
+        )
+
     mcp_app = mcp.http_app(path="/mcp", transport="streamable-http", json_response=True)
 
     @asynccontextmanager
@@ -295,6 +401,21 @@ def _context_request(ctx: Context | None) -> Request:
     if request is None:
         raise ValueError("MCP request context is unavailable")
     return request
+
+
+async def _reporting_call(ctx: Context | None, operation: Any) -> dict[str, object]:
+    try:
+        return await operation(_forward_headers(_context_request(ctx)))
+    except RestFailure as failure:
+        raise ToolError(failure.error.model_dump_json()) from None
+    except ValueError:
+        raise ToolError(
+            SafeError.for_code("INTERNAL_ERROR").model_dump_json()
+        ) from None
+
+
+def _defined_params(**params: object) -> dict[str, object]:
+    return {name: value for name, value in params.items() if value is not None}
 
 
 def _forward_headers(request: Request) -> dict[str, str]:

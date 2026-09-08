@@ -13,7 +13,12 @@
       "list_attendance_events(employee_id, start_date, end_date, limit=50, offset=0)",
       "get_attendance_event(attendance_event_id)",
       "get_daily_attendance(employee_id, day)",
-      "get_planned_work(employee_id, start_date, end_date)"
+      "get_planned_work(employee_id, start_date, end_date)",
+      "get_current_attendance(as_of=None, status=None, limit=50, offset=0)",
+      "get_employee_attendance_analysis(employee_id, start_date, end_date)",
+      "get_employee_attendance_summary(employee_id, start_date, end_date)",
+      "get_exceptions(start_date, end_date, employee_ids=None, limit=50, offset=0)",
+      "get_organization_attendance_analysis(start_date, end_date, limit=50, offset=0)"
     ],
     "events": []
   },
@@ -26,7 +31,7 @@
     ]
   },
   "open_issues_or_blockers": [
-    "Nine local adapter tests verify canonical requester, catalog, and administrative tool route/argument mapping, legacy date schemas and descriptions, MCP contract-version headers, allowed header propagation, CRMT safe-error filtering, session admission, and public liveness.",
+    "Local adapter tests verify canonical requester, catalog, administrative, and reporting tool route/argument mappings, MCP schemas, contract-version headers, allowed header propagation, CRMT safe-error filtering, session admission, and public liveness.",
     "The local Docker image attendance-mcp:local-test builds successfully from the merged adapter source.",
     "No authorized non-production deployment, Entra/OBO, audit, or end-to-end evidence exists; local implementation does not clear these external gates."
   ]
