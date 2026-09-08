@@ -145,6 +145,53 @@ class CrmtRestClient:
             raise RestFailure(SafeError.for_code("BACKEND_UNAVAILABLE")) from None
         return value
 
+    async def get_current_attendance(
+        self, *, headers: Mapping[str, str], params: Mapping[str, object]
+    ) -> dict[str, object]:
+        return await self._get_object(
+            "/api/v1/attendance/current", headers=headers, params=params
+        )
+
+    async def get_employee_attendance_analysis(
+        self,
+        *,
+        employee_id: int,
+        headers: Mapping[str, str],
+        params: Mapping[str, object],
+    ) -> dict[str, object]:
+        return await self._get_object(
+            f"/api/v1/employees/{employee_id}/attendance-analysis",
+            headers=headers,
+            params=params,
+        )
+
+    async def get_employee_attendance_summary(
+        self,
+        *,
+        employee_id: int,
+        headers: Mapping[str, str],
+        params: Mapping[str, object],
+    ) -> dict[str, object]:
+        return await self._get_object(
+            f"/api/v1/employees/{employee_id}/attendance-summary",
+            headers=headers,
+            params=params,
+        )
+
+    async def get_exceptions(
+        self, *, headers: Mapping[str, str], params: Mapping[str, object]
+    ) -> dict[str, object]:
+        return await self._get_object(
+            "/api/v1/attendance/exceptions", headers=headers, params=params
+        )
+
+    async def get_organization_attendance_analysis(
+        self, *, headers: Mapping[str, str], params: Mapping[str, object]
+    ) -> dict[str, object]:
+        return await self._get_object(
+            "/api/v1/attendance/organization-analysis", headers=headers, params=params
+        )
+
     async def aclose(self) -> None:
         """Close the owned HTTP client during ASGI shutdown."""
         await self._client.aclose()

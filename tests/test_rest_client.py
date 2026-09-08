@@ -169,3 +169,70 @@ async def test_catalog_routes_preserve_arguments_and_forward_only_allowed_header
         assert request.headers["authorization"] == headers["Authorization"]
         assert request.headers["x-correlation-id"] == headers["X-Correlation-ID"]
         assert "x-caller-controlled" not in request.headers
+
+
+@pytest.mark.asyncio
+async def test_reporting_routes_preserve_arguments_and_safe_failures() -> None:
+    received: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        received.append(request)
+        if request.url.path.endswith("exceptions"):
+            return httpx.Response(
+                403,
+                json={
+                    "code": "FORBIDDEN",
+                    "message": "You do not have permission to do that.",
+                },
+                headers={"X-Attendance-API-Contract-Version": "1.0.0"},
+            )
+        return httpx.Response(
+            200,
+            json={"items": []},
+            headers={"X-Attendance-API-Contract-Version": "1.0.0"},
+        )
+
+    headers = {
+        "Authorization": "Bearer delegated-token",
+        "X-Correlation-ID": "11111111-1111-1111-1111-111111111111",
+    }
+    async with httpx.AsyncClient(
+        base_url="https://crmt.example", transport=httpx.MockTransport(handler)
+    ) as http_client:
+        client = CrmtRestClient(client=http_client)
+        await client.get_current_attendance(
+            headers=headers, params={"status": "remote", "limit": 25, "offset": 2}
+        )
+        await client.get_employee_attendance_analysis(
+            employee_id=42,
+            headers=headers,
+            params={"start_date": "2026-08-01", "end_date": "2026-08-02"},
+        )
+        await client.get_employee_attendance_summary(
+            employee_id=42,
+            headers=headers,
+            params={"start_date": "2026-08-01", "end_date": "2026-08-02"},
+        )
+        with pytest.raises(RestFailure) as raised:
+            await client.get_exceptions(
+                headers=headers,
+                params={"start_date": "2026-08-01", "end_date": "2026-08-02"},
+            )
+        await client.get_organization_attendance_analysis(
+            headers=headers,
+            params={"start_date": "2026-08-01", "end_date": "2026-08-02"},
+        )
+
+    assert raised.value.error.code == "FORBIDDEN"
+    assert [request.url.path for request in received] == [
+        "/api/v1/attendance/current",
+        "/api/v1/employees/42/attendance-analysis",
+        "/api/v1/employees/42/attendance-summary",
+        "/api/v1/attendance/exceptions",
+        "/api/v1/attendance/organization-analysis",
+    ]
+    assert dict(received[0].url.params) == {
+        "status": "remote",
+        "limit": "25",
+        "offset": "2",
+    }

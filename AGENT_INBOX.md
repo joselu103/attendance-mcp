@@ -2,19 +2,19 @@
 
 > **Status:** Completed
 >
-> **Objective:** Reconcile PR #12 with the catalog-tool changes already merged
-> to `main`, preserving both REST-backed tool sets.
+> **Objective:** Reconcile the latest `main` with issue #5, preserving the
+> canonical, catalog, administrative, and reporting REST-backed tool sets.
 >
 > **Contract context:** Preserve MCP contract `1.2.0`; retain the canonical,
-> catalog, and administrative REST mappings while CRMT remains the authority
+> catalog, administrative, and reporting REST mappings while CRMT remains the authority
 > for identity, authorization, auditing, attendance behavior, and safe errors.
 >
 > **Verification:** The merge retains both tool sets. `uv run pytest`,
 > `uv run ruff check .`, `uv run ruff format --check .`, and the local Docker
 > build completed successfully.
 >
-> **Definition of done:** PR #12 merges cleanly with `main` and includes both
-> catalog and administrative adapter behavior with passing verification.
+> **Definition of done:** This branch includes all fourteen read-only REST-backed
+> tools with passing verification.
 
 The repository has been initialized with its agent operating documentation only.
 Before beginning an implementation slice, record an approved, bounded directive
