@@ -548,3 +548,103 @@ async def test_catalog_includes_read_only_reporting_tools(app) -> None:
         "get_exceptions",
         "get_organization_attendance_analysis",
     } <= names
+
+
+@pytest.mark.asyncio
+async def test_tool_call_logs_safe_mcp_and_crmt_lifecycles_end_to_end(
+    app, monkeypatch
+) -> None:
+    mcp_events: list[tuple[str, dict[str, object]]] = []
+    crmt_events: list[tuple[str, dict[str, object]]] = []
+
+    class CapturingLogger:
+        def __init__(self, events: list[tuple[str, dict[str, object]]]) -> None:
+            self._events = events
+
+        def info(self, event: str, **values: object) -> None:
+            self._events.append((event, values))
+
+        def warning(self, event: str, **values: object) -> None:
+            self._events.append((event, values))
+
+    monkeypatch.setattr("attendance_mcp.app.logger", CapturingLogger(mcp_events))
+    monkeypatch.setattr(
+        "attendance_mcp.rest_client.logger", CapturingLogger(crmt_events)
+    )
+    initialize = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-03-26",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1"},
+        },
+    }
+    async with (
+        app.router.lifespan_context(app),
+        httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
+        ) as client,
+    ):
+        initialized = await client.post("/mcp", headers=HEADERS, json=initialize)
+        session_headers = {
+            **HEADERS,
+            "Mcp-Session-Id": initialized.headers["Mcp-Session-Id"],
+        }
+        await client.post(
+            "/mcp",
+            headers=session_headers,
+            json={
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized",
+                "params": {},
+            },
+        )
+        response = await client.post(
+            "/mcp",
+            headers=session_headers,
+            json={
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {
+                    "name": "list_my_attendance_events",
+                    "arguments": {
+                        "start_date": "2026-08-01",
+                        "end_date": "2026-08-02",
+                    },
+                },
+            },
+        )
+
+    assert response.status_code == 200
+    tool_events = [event for event in mcp_events if event[0].startswith("mcp_tool_")]
+    assert [event for event, _ in tool_events] == [
+        "mcp_tool_operation_started",
+        "mcp_tool_operation_step_completed",
+        "mcp_tool_operation_succeeded",
+    ]
+    assert all(
+        values["handler"] == "list_my_attendance_events" for _, values in tool_events
+    )
+    assert all(
+        values["input_shape"]
+        == ("start_date:date", "end_date:date", "limit:int", "offset:int")
+        for _, values in tool_events
+    )
+    operation_events = [
+        event
+        for event in crmt_events
+        if event[0].startswith("crmt_operation_")
+        and event[1].get("operation") == "list_my_attendance_events"
+    ]
+    assert [event for event, _ in operation_events] == [
+        "crmt_operation_started",
+        "crmt_operation_succeeded",
+    ]
+    assert all(
+        values["operation"] == "list_my_attendance_events"
+        and values["route_template"] == "/api/v1/me/attendance-events"
+        for _, values in operation_events
+    )
