@@ -3,6 +3,7 @@
 import json
 from contextlib import asynccontextmanager
 from datetime import date, datetime
+from functools import wraps
 from time import perf_counter
 from typing import Any, Literal
 from uuid import UUID, uuid4
@@ -54,6 +55,10 @@ def create_app(
             "limit must be from 1 through 100 and offset must be nonnegative."
         ),
     )
+    @_instrument_tool(
+        "list_my_attendance_events",
+        ("start_date:date", "end_date:date", "limit:int", "offset:int"),
+    )
     async def list_my_attendance_events(
         start_date: date,
         end_date: date,
@@ -87,6 +92,7 @@ def create_app(
             "records are excluded. Results use bounded limit/offset pagination."
         ),
     )
+    @_instrument_tool("list_employees", ("limit:int", "offset:int"))
     async def list_employees(
         limit: int = 50, offset: int = 0, ctx: Context | None = None
     ) -> dict[str, object]:
@@ -107,6 +113,7 @@ def create_app(
         name="get_employee",
         description="Return one employee's directory-safe metadata by ID.",
     )
+    @_instrument_tool("get_employee", ("employee_id:int",))
     async def get_employee(
         employee_id: int, ctx: Context | None = None
     ) -> dict[str, object]:
@@ -129,6 +136,7 @@ def create_app(
             "Locations are reference data, not caller-selected input."
         ),
     )
+    @_instrument_tool("list_punch_types", ("active_only:bool",))
     async def list_punch_types(
         active_only: bool = True, ctx: Context | None = None
     ) -> list[object]:
@@ -148,6 +156,7 @@ def create_app(
         name="list_locations",
         description="List attendance-event location reference data.",
     )
+    @_instrument_tool("list_locations", ())
     async def list_locations(ctx: Context | None = None) -> list[object]:
         """Map the legacy location lookup to CRMT REST."""
         try:
@@ -166,6 +175,16 @@ def create_app(
         description=(
             "List one employee's attendance events in a bounded date range. "
             "This MVP tool is available only to the server-configured admin requester."
+        ),
+    )
+    @_instrument_tool(
+        "list_attendance_events",
+        (
+            "employee_id:int",
+            "start_date:date",
+            "end_date:date",
+            "limit:int",
+            "offset:int",
         ),
     )
     async def list_attendance_events(
@@ -199,6 +218,7 @@ def create_app(
         name="get_attendance_event",
         description="Return one attendance event, including recorded audit metadata.",
     )
+    @_instrument_tool("get_attendance_event", ("attendance_event_id:int",))
     async def get_attendance_event(
         attendance_event_id: int, ctx: Context | None = None
     ) -> dict[str, object]:
@@ -222,6 +242,7 @@ def create_app(
             "calculated planned-versus-logged outcome."
         ),
     )
+    @_instrument_tool("get_daily_attendance", ("employee_id:int", "day:date"))
     async def get_daily_attendance(
         employee_id: int, day: date, ctx: Context | None = None
     ) -> dict[str, object]:
@@ -246,6 +267,9 @@ def create_app(
             "inclusive Europe/Ljubljana range of up to 31 calendar days."
         ),
     )
+    @_instrument_tool(
+        "get_planned_work", ("employee_id:int", "start_date:date", "end_date:date")
+    )
     async def get_planned_work(
         employee_id: int,
         start_date: date,
@@ -267,6 +291,10 @@ def create_app(
             ) from None
 
     @mcp.tool(name="get_current_attendance", annotations={"readOnlyHint": True})
+    @_instrument_tool(
+        "get_current_attendance",
+        ("as_of:datetime?", "status:string?", "limit:int", "offset:int"),
+    )
     async def get_current_attendance(
         as_of: datetime | None = None,
         status: Literal[
@@ -299,6 +327,10 @@ def create_app(
     @mcp.tool(
         name="get_employee_attendance_analysis", annotations={"readOnlyHint": True}
     )
+    @_instrument_tool(
+        "get_employee_attendance_analysis",
+        ("employee_id:int", "start_date:date", "end_date:date"),
+    )
     async def get_employee_attendance_analysis(
         employee_id: int, start_date: date, end_date: date, ctx: Context | None = None
     ) -> dict[str, object]:
@@ -314,6 +346,10 @@ def create_app(
     @mcp.tool(
         name="get_employee_attendance_summary", annotations={"readOnlyHint": True}
     )
+    @_instrument_tool(
+        "get_employee_attendance_summary",
+        ("employee_id:int", "start_date:date", "end_date:date"),
+    )
     async def get_employee_attendance_summary(
         employee_id: int, start_date: date, end_date: date, ctx: Context | None = None
     ) -> dict[str, object]:
@@ -327,6 +363,16 @@ def create_app(
         )
 
     @mcp.tool(name="get_exceptions", annotations={"readOnlyHint": True})
+    @_instrument_tool(
+        "get_exceptions",
+        (
+            "start_date:date",
+            "end_date:date",
+            "employee_ids:list?",
+            "limit:int",
+            "offset:int",
+        ),
+    )
     async def get_exceptions(
         start_date: date,
         end_date: date,
@@ -351,6 +397,10 @@ def create_app(
 
     @mcp.tool(
         name="get_organization_attendance_analysis", annotations={"readOnlyHint": True}
+    )
+    @_instrument_tool(
+        "get_organization_attendance_analysis",
+        ("start_date:date", "end_date:date", "limit:int", "offset:int"),
     )
     async def get_organization_attendance_analysis(
         start_date: date,
@@ -398,6 +448,52 @@ def create_app(
 
 async def _health(_: Request) -> JSONResponse:
     return JSONResponse({"status": "ok"})
+
+
+def _instrument_tool(handler: str, input_shape: tuple[str, ...]):
+    """Record a tool lifecycle without retaining caller values or tool results."""
+
+    def decorate(operation: Any) -> Any:
+        @wraps(operation)
+        async def instrumented(*args: Any, **kwargs: Any) -> Any:
+            started_at = perf_counter()
+            logger.info(
+                "mcp_tool_operation_started",
+                handler=handler,
+                step="invocation",
+                input_shape=input_shape,
+            )
+            try:
+                result = await operation(*args, **kwargs)
+            except Exception as error:
+                logger.warning(
+                    "mcp_tool_operation_failed",
+                    handler=handler,
+                    step="crmt_rest_call",
+                    input_shape=input_shape,
+                    duration_ms=_duration_ms(started_at),
+                    error_type=type(error).__name__,
+                )
+                raise
+            logger.info(
+                "mcp_tool_operation_step_completed",
+                handler=handler,
+                step="crmt_rest_call",
+                input_shape=input_shape,
+                duration_ms=_duration_ms(started_at),
+            )
+            logger.info(
+                "mcp_tool_operation_succeeded",
+                handler=handler,
+                step="completed",
+                input_shape=input_shape,
+                duration_ms=_duration_ms(started_at),
+            )
+            return result
+
+        return instrumented
+
+    return decorate
 
 
 def _context_request(ctx: Context | None) -> Request:
