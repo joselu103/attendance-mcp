@@ -1,14 +1,17 @@
 """The adapter's single deep, safe REST-client seam."""
 
 from collections.abc import Mapping
+from time import perf_counter
 
 import httpx
+import structlog
 
 from attendance_mcp.contracts import SafeError
 
 REST_CONTRACT_HEADER = "X-Attendance-API-Contract-Version"
 AUTHORIZATION_HEADER = "Authorization"
 CORRELATION_ID_HEADER = "X-Correlation-ID"
+logger = structlog.get_logger(__name__)
 
 
 class RestFailure(Exception):
@@ -204,6 +207,14 @@ class CrmtRestClient:
         headers: Mapping[str, str],
         params: Mapping[str, object] | None = None,
     ) -> httpx.Response:
+        operation, route_template = _operation_metadata(method, path)
+        started_at = perf_counter()
+        logger.info(
+            "crmt_operation_started",
+            operation=operation,
+            method=method,
+            route_template=route_template,
+        )
         try:
             response = await self._client.request(
                 method,
@@ -215,14 +226,37 @@ class CrmtRestClient:
                 params=params,
             )
         except httpx.HTTPError:
+            _log_crmt_failure(
+                operation, method, route_template, started_at, "BACKEND_UNAVAILABLE"
+            )
             raise RestFailure(SafeError.for_code("BACKEND_UNAVAILABLE")) from None
 
         if self._contract_major_is_incompatible(response):
+            _log_crmt_failure(
+                operation, method, route_template, started_at, "BACKEND_UNAVAILABLE"
+            )
             raise RestFailure(SafeError.for_code("BACKEND_UNAVAILABLE"))
         if response.is_success:
+            logger.info(
+                "crmt_operation_succeeded",
+                operation=operation,
+                method=method,
+                route_template=route_template,
+                outcome="succeeded",
+                status_code=response.status_code,
+                duration_ms=_duration_ms(started_at),
+            )
             return response
 
         error = self._safe_error(response)
+        _log_crmt_failure(
+            operation,
+            method,
+            route_template,
+            started_at,
+            (error or SafeError.for_code("BACKEND_UNAVAILABLE")).code,
+            status_code=response.status_code if error else 503,
+        )
         raise RestFailure(
             error or SafeError.for_code("BACKEND_UNAVAILABLE"),
             status_code=response.status_code if error else 503,
@@ -241,3 +275,60 @@ class CrmtRestClient:
             return SafeError.from_upstream(response.json())
         except ValueError:
             return None
+
+
+def _operation_metadata(method: str, path: str) -> tuple[str, str]:
+    """Return stable labels without ever retaining a concrete upstream URL."""
+    exact_routes = {
+        ("POST", "/internal/v1/mcp/session-admissions"): "admit_session",
+        ("GET", "/api/v1/me/attendance-events"): "list_my_attendance_events",
+        ("GET", "/api/v1/employees"): "list_employees",
+        ("GET", "/api/v1/punch-types"): "list_punch_types",
+        ("GET", "/api/v1/locations"): "list_locations",
+        ("GET", "/api/v1/attendance/current"): "get_current_attendance",
+        ("GET", "/api/v1/attendance/exceptions"): "get_exceptions",
+        ("GET", "/api/v1/attendance/organization-analysis"): (
+            "get_organization_attendance_analysis"
+        ),
+    }
+    if (operation := exact_routes.get((method, path))) is not None:
+        return operation, path
+    for suffix, operation in {
+        "attendance-events": "list_attendance_events",
+        "daily-attendance": "get_daily_attendance",
+        "planned-work": "get_planned_work",
+        "attendance-analysis": "get_employee_attendance_analysis",
+        "attendance-summary": "get_employee_attendance_summary",
+    }.items():
+        if path.startswith("/api/v1/employees/") and path.endswith(f"/{suffix}"):
+            return operation, f"/api/v1/employees/{{employee_id}}/{suffix}"
+    if path.startswith("/api/v1/employees/"):
+        return "get_employee", "/api/v1/employees/{employee_id}"
+    if path.startswith("/api/v1/attendance-events/"):
+        return "get_attendance_event", "/api/v1/attendance-events/{attendance_event_id}"
+    return "unknown", "unknown"
+
+
+def _log_crmt_failure(
+    operation: str,
+    method: str,
+    route_template: str,
+    started_at: float,
+    safe_error_code: str,
+    *,
+    status_code: int | None = None,
+) -> None:
+    logger.warning(
+        "crmt_operation_failed",
+        operation=operation,
+        method=method,
+        route_template=route_template,
+        outcome="failed",
+        safe_error_code=safe_error_code,
+        status_code=status_code,
+        duration_ms=_duration_ms(started_at),
+    )
+
+
+def _duration_ms(started_at: float) -> int:
+    return round((perf_counter() - started_at) * 1000)
