@@ -2,24 +2,24 @@
 
 > **Status:** Completed
 >
-> **Objective:** Complete attendance-mcp#23 by verifying the structured-logging
-> contract end to end and publishing evidence-backed local repository status.
+> **Objective:** Reproduce and resolve attendance-teams-bot MCP tool discovery
+> failure using the adapter's actual Streamable HTTP catalog and the bot's
+> compatible validation.
 >
-> **Contract context:** Preserve MCP contract `1.2.0`, allowed header
-> forwarding, and the thin adapter boundary. CRMT remains the authority for
-> token validation, identity, authorization, audit, and attendance behavior.
-> Verify only stable handlers and route templates, sanitized argument shapes,
-> durations, and safe outcomes; never log headers, values, tokens, identities,
-> URLs, query strings, request bodies, upstream payloads, or attendance data.
+> **Contract context:** Preserve MCP contract `1.2.0`, Streamable HTTP behavior,
+> legacy tool names, schemas, descriptions, and allowed header forwarding. CRMT
+> remains the authority for token validation, identity, authorization, audit,
+> and attendance behavior. Do not use secrets, SQL Server, raw attendance data,
+> or external deployments. Diagnostics, if needed, must be correlation-scoped
+> DEBUG and value-free metadata only.
 >
-> **Verification:** Added an end-to-end Streamable HTTP regression test spanning
-> an admitted requester tool call and its safe MCP/CRMT lifecycle events.
-> Verified with `uv run pytest` (35 passed), `uv run ruff check .`, and
-> `uv run ruff format --check .`.
+> **Verification:** The in-process adapter/bot bridge discovers all fourteen
+> tools and admits the frozen requester catalog. Verified with `uv run pytest`
+> (36 passed), `uv run ruff check .`, and `uv run ruff format --check .`.
 >
-> **Definition of done:** The local suite proves the safe logging contract across
-> the MCP tool and CRMT seam; the directive and `AGENT_STATE.json` record only
-> direct local evidence and retain all external readiness limitations.
+> **Definition of done:** Completed locally: the catalog rejection is resolved
+> with SDK-compatible metadata, a bounded FastMCP 3.4.5 dependency, and
+> regression coverage. External deployment and end-to-end limitations remain.
 
 The repository has been initialized with its agent operating documentation only.
 Before beginning an implementation slice, record an approved, bounded directive

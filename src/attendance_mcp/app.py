@@ -49,6 +49,7 @@ def create_app(
 
     @mcp.tool(
         name="list_my_attendance_events",
+        annotations={"readOnlyHint": True},
         description=(
             "List the requesting employee's attendance events over one through 31 "
             "inclusive calendar days. Employee identity is resolved by the server; "
@@ -87,6 +88,7 @@ def create_app(
 
     @mcp.tool(
         name="list_employees",
+        annotations={"readOnlyHint": True},
         description=(
             "List active employees for attendance lookups. Inactive employee "
             "records are excluded. Results use bounded limit/offset pagination."
@@ -111,6 +113,7 @@ def create_app(
 
     @mcp.tool(
         name="get_employee",
+        annotations={"readOnlyHint": True},
         description="Return one employee's directory-safe metadata by ID.",
     )
     @_instrument_tool("get_employee", ("employee_id:int",))
@@ -131,6 +134,7 @@ def create_app(
 
     @mcp.tool(
         name="list_punch_types",
+        annotations={"readOnlyHint": True},
         description=(
             "List configured punch types and their server-derived attendance locations. "
             "Locations are reference data, not caller-selected input."
@@ -154,6 +158,7 @@ def create_app(
 
     @mcp.tool(
         name="list_locations",
+        annotations={"readOnlyHint": True},
         description="List attendance-event location reference data.",
     )
     @_instrument_tool("list_locations", ())
@@ -172,6 +177,7 @@ def create_app(
 
     @mcp.tool(
         name="list_attendance_events",
+        annotations={"readOnlyHint": True},
         description=(
             "List one employee's attendance events in a bounded date range. "
             "This MVP tool is available only to the server-configured admin requester."
@@ -216,6 +222,7 @@ def create_app(
 
     @mcp.tool(
         name="get_attendance_event",
+        annotations={"readOnlyHint": True},
         description="Return one attendance event, including recorded audit metadata.",
     )
     @_instrument_tool("get_attendance_event", ("attendance_event_id:int",))
@@ -237,6 +244,7 @@ def create_app(
 
     @mcp.tool(
         name="get_daily_attendance",
+        annotations={"readOnlyHint": True},
         description=(
             "Return one employee's local-calendar daily attendance events and "
             "calculated planned-versus-logged outcome."
@@ -262,6 +270,7 @@ def create_app(
 
     @mcp.tool(
         name="get_planned_work",
+        annotations={"readOnlyHint": True},
         description=(
             "Return recorded daily planned-work hours for one employee over an "
             "inclusive Europe/Ljubljana range of up to 31 calendar days."
@@ -290,7 +299,14 @@ def create_app(
                 SafeError.for_code("INTERNAL_ERROR").model_dump_json()
             ) from None
 
-    @mcp.tool(name="get_current_attendance", annotations={"readOnlyHint": True})
+    @mcp.tool(
+        name="get_current_attendance",
+        description=(
+            "List current attendance states as of an optional timestamp with bounded "
+            "pagination."
+        ),
+        annotations={"readOnlyHint": True},
+    )
     @_instrument_tool(
         "get_current_attendance",
         ("as_of:datetime?", "status:string?", "limit:int", "offset:int"),
@@ -325,7 +341,11 @@ def create_app(
         )
 
     @mcp.tool(
-        name="get_employee_attendance_analysis", annotations={"readOnlyHint": True}
+        name="get_employee_attendance_analysis",
+        description=(
+            "Return attendance analysis for one employee over an inclusive date range."
+        ),
+        annotations={"readOnlyHint": True},
     )
     @_instrument_tool(
         "get_employee_attendance_analysis",
@@ -344,7 +364,11 @@ def create_app(
         )
 
     @mcp.tool(
-        name="get_employee_attendance_summary", annotations={"readOnlyHint": True}
+        name="get_employee_attendance_summary",
+        description=(
+            "Return an attendance summary for one employee over an inclusive date range."
+        ),
+        annotations={"readOnlyHint": True},
     )
     @_instrument_tool(
         "get_employee_attendance_summary",
@@ -362,7 +386,14 @@ def create_app(
             ),
         )
 
-    @mcp.tool(name="get_exceptions", annotations={"readOnlyHint": True})
+    @mcp.tool(
+        name="get_exceptions",
+        description=(
+            "List attendance exceptions over an inclusive date range with bounded "
+            "pagination."
+        ),
+        annotations={"readOnlyHint": True},
+    )
     @_instrument_tool(
         "get_exceptions",
         (
@@ -396,7 +427,12 @@ def create_app(
         )
 
     @mcp.tool(
-        name="get_organization_attendance_analysis", annotations={"readOnlyHint": True}
+        name="get_organization_attendance_analysis",
+        description=(
+            "Return organization attendance analysis over an inclusive date range "
+            "with bounded pagination."
+        ),
+        annotations={"readOnlyHint": True},
     )
     @_instrument_tool(
         "get_organization_attendance_analysis",

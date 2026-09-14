@@ -7,6 +7,7 @@ from attendance_mcp.settings import Settings
 HEADERS = {
     "Authorization": "Bearer delegated-token",
     "X-Correlation-ID": "11111111-1111-1111-1111-111111111111",
+    "Accept": "application/json, text/event-stream",
 }
 
 
@@ -97,10 +98,7 @@ async def test_mcp_initialize_admits_session_and_tool_call_maps_to_crmt(
                 },
             },
         )
-        session_headers = {
-            **HEADERS,
-            "Mcp-Session-Id": initialized.headers["Mcp-Session-Id"],
-        }
+        session_headers = HEADERS
         await client.post(
             "/mcp",
             headers=session_headers,
@@ -167,6 +165,57 @@ async def test_mcp_rejects_missing_or_malformed_forwarded_headers(app) -> None:
     assert missing.json()["code"] == "AUTHENTICATION_REQUIRED"
     assert malformed.status_code == 400
     assert malformed.json()["code"] == "CORRELATION_ID_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_catalog_admits_every_legacy_read_only_tool_for_the_teams_bot(
+    app,
+) -> None:
+    """Exercise the SDK server catalog against the bot's safe admission contract."""
+    async with (
+        app.router.lifespan_context(app),
+        httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
+        ) as client,
+    ):
+        await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "teams-bot-compatible-test", "version": "1"},
+                },
+            },
+        )
+        catalog = await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        )
+
+    tools = catalog.json()["result"]["tools"]
+    requester = next(
+        tool for tool in tools if tool["name"] == "list_my_attendance_events"
+    )
+    assert len(tools) == 14
+    assert all(
+        isinstance(tool["description"], str) and len(tool["description"]) <= 4_096
+        for tool in tools
+    )
+    assert all(tool["annotations"] == {"readOnlyHint": True} for tool in tools)
+    assert requester["inputSchema"]["type"] == "object"
+    assert requester["inputSchema"]["required"] == ["start_date", "end_date"]
+    assert set(requester["inputSchema"]["properties"]) == {
+        "start_date",
+        "end_date",
+        "limit",
+        "offset",
+    }
 
 
 @pytest.mark.asyncio
@@ -294,7 +343,7 @@ async def test_administrative_tools_map_legacy_arguments_to_crmt(
             transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
         ) as client,
     ):
-        initialized = await client.post(
+        await client.post(
             "/mcp",
             headers=HEADERS,
             json={
@@ -308,10 +357,7 @@ async def test_administrative_tools_map_legacy_arguments_to_crmt(
                 },
             },
         )
-        session_headers = {
-            **HEADERS,
-            "Mcp-Session-Id": initialized.headers["Mcp-Session-Id"],
-        }
+        session_headers = HEADERS
         await client.post(
             "/mcp",
             headers=session_headers,
@@ -428,7 +474,7 @@ async def test_catalog_tools_preserve_legacy_names_defaults_and_rest_mappings(
             transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
         ) as client,
     ):
-        initialized = await client.post(
+        await client.post(
             "/mcp",
             headers=HEADERS,
             json={
@@ -442,10 +488,7 @@ async def test_catalog_tools_preserve_legacy_names_defaults_and_rest_mappings(
                 },
             },
         )
-        session_headers = {
-            **HEADERS,
-            "Mcp-Session-Id": initialized.headers["Mcp-Session-Id"],
-        }
+        session_headers = HEADERS
         await client.post(
             "/mcp",
             headers=session_headers,
@@ -516,7 +559,7 @@ async def test_catalog_includes_read_only_reporting_tools(app) -> None:
             transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
         ) as client,
     ):
-        initialized = await client.post(
+        await client.post(
             "/mcp",
             headers=HEADERS,
             json={
@@ -532,10 +575,7 @@ async def test_catalog_includes_read_only_reporting_tools(app) -> None:
         )
         response = await client.post(
             "/mcp",
-            headers={
-                **HEADERS,
-                "Mcp-Session-Id": initialized.headers["Mcp-Session-Id"],
-            },
+            headers=HEADERS,
             json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
         )
 
@@ -587,11 +627,8 @@ async def test_tool_call_logs_safe_mcp_and_crmt_lifecycles_end_to_end(
             transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
         ) as client,
     ):
-        initialized = await client.post("/mcp", headers=HEADERS, json=initialize)
-        session_headers = {
-            **HEADERS,
-            "Mcp-Session-Id": initialized.headers["Mcp-Session-Id"],
-        }
+        await client.post("/mcp", headers=HEADERS, json=initialize)
+        session_headers = HEADERS
         await client.post(
             "/mcp",
             headers=session_headers,
