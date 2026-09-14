@@ -369,7 +369,12 @@ def create_app(
             ),
         )
 
-    mcp_app = mcp.http_app(path="/mcp", transport="streamable-http", json_response=True)
+    mcp_app = mcp.http_app(
+        path="/mcp",
+        transport="streamable-http",
+        json_response=True,
+        stateless_http=True,
+    )
 
     @asynccontextmanager
     async def lifespan(_: Starlette):
