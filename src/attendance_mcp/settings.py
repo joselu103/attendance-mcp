@@ -1,6 +1,6 @@
 """Non-secret runtime configuration for the stateless adapter."""
 
-from pydantic import AnyHttpUrl, Field
+from pydantic import AnyHttpUrl, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,3 +16,6 @@ class Settings(BaseSettings):
 
     crmt_base_url: AnyHttpUrl = Field(description="Attendance CRMT REST base URL")
     request_timeout_seconds: float = Field(default=10, gt=0, le=30)
+    runtime_environment: str = "development"
+    log_redacted_keys: list[str] = Field(default_factory=list)
+    log_redacted_values: list[SecretStr] = Field(default_factory=list)

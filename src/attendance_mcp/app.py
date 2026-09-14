@@ -7,6 +7,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 import httpx
+import structlog
 from fastmcp import Context, FastMCP
 from fastmcp.exceptions import ToolError
 from starlette.applications import Starlette
@@ -26,6 +27,7 @@ from attendance_mcp.settings import Settings
 
 MCP_CONTRACT_VERSION = "1.2.0"
 MCP_CONTRACT_VERSION_HEADER = "X-Attendance-MCP-Contract-Version"
+logger = structlog.get_logger(__name__)
 
 
 def create_app(
@@ -389,6 +391,7 @@ def create_app(
     )
     app.add_middleware(_AdmissionMiddleware, rest_client=rest_client)
     app.add_middleware(_McpContractVersionMiddleware)
+    app.add_middleware(_RequestLoggingMiddleware)
     return app
 
 
@@ -486,6 +489,52 @@ class _AdmissionMiddleware:
             return {"type": "http.request", "body": body, "more_body": False}
 
         await self._app(scope, replay, send)
+
+
+class _RequestLoggingMiddleware:
+    """Bind only a valid correlation ID while an HTTP request is in flight."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+        structlog.contextvars.clear_contextvars()
+        correlation_id = _request_correlation_id(scope)
+        if correlation_id is not None:
+            structlog.contextvars.bind_contextvars(correlation_id=correlation_id)
+        status_code: int | None = None
+
+        async def send_with_status(message: Message) -> None:
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
+            await send(message)
+
+        try:
+            await self._app(scope, receive, send_with_status)
+            logger.info("http_request_completed", status_code=status_code)
+        except Exception:
+            logger.exception("http_request_failed")
+            raise
+        finally:
+            structlog.contextvars.clear_contextvars()
+
+
+def _request_correlation_id(scope: Scope) -> str | None:
+    values = [
+        value.decode("latin-1")
+        for name, value in scope.get("headers", [])
+        if name.lower() == CORRELATION_ID_HEADER.lower().encode()
+    ]
+    if len(values) != 1:
+        return None
+    try:
+        return str(UUID(values[0]))
+    except ValueError:
+        return None
 
 
 class _McpContractVersionMiddleware:
