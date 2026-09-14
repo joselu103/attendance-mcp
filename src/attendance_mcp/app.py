@@ -3,8 +3,9 @@
 import json
 from contextlib import asynccontextmanager
 from datetime import date, datetime
+from time import perf_counter
 from typing import Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 import structlog
@@ -456,6 +457,12 @@ class _AdmissionMiddleware:
         try:
             headers = _forward_headers(request)
         except HeaderFailure as failure:
+            _set_lifecycle_result(
+                scope,
+                result_state="header_rejected",
+                header_admission="rejected",
+                safe_error_code=failure.code,
+            )
             status_code = (
                 401
                 if failure.code in {"AUTHENTICATION_REQUIRED", "TOKEN_INVALID"}
@@ -466,8 +473,15 @@ class _AdmissionMiddleware:
             )
             return
 
+        _set_lifecycle_result(scope, header_admission="accepted")
+
         body = await request.body()
         if len(body) > 65536:
+            _set_lifecycle_result(
+                scope,
+                result_state="request_rejected",
+                safe_error_code="INVALID_ARGUMENT",
+            )
             await _send_safe_error(
                 scope, send, SafeError.for_code("INVALID_ARGUMENT"), 400
             )
@@ -476,8 +490,15 @@ class _AdmissionMiddleware:
             try:
                 await self._rest_client.admit_session(headers)
             except RestFailure as failure:
+                _set_lifecycle_result(
+                    scope,
+                    result_state="session_rejected",
+                    crmt_admission="rejected",
+                    safe_error_code=failure.error.code,
+                )
                 await _send_safe_error(scope, send, failure.error, failure.status_code)
                 return
+            _set_lifecycle_result(scope, crmt_admission="admitted")
 
         sent = False
 
@@ -492,7 +513,7 @@ class _AdmissionMiddleware:
 
 
 class _RequestLoggingMiddleware:
-    """Bind only a valid correlation ID while an HTTP request is in flight."""
+    """Record safe public HTTP lifecycle events with a per-request trace ID."""
 
     def __init__(self, app: ASGIApp) -> None:
         self._app = app
@@ -502,10 +523,12 @@ class _RequestLoggingMiddleware:
             await self._app(scope, receive, send)
             return
         structlog.contextvars.clear_contextvars()
-        correlation_id = _request_correlation_id(scope)
-        if correlation_id is not None:
-            structlog.contextvars.bind_contextvars(correlation_id=correlation_id)
+        trace_id = _request_correlation_id(scope) or str(uuid4())
+        structlog.contextvars.bind_contextvars(trace_id=trace_id)
+        route = scope.get("path", "")
+        started_at = perf_counter()
         status_code: int | None = None
+        logger.info("http_request_received", route=route, trace_id=trace_id)
 
         async def send_with_status(message: Message) -> None:
             nonlocal status_code
@@ -515,9 +538,27 @@ class _RequestLoggingMiddleware:
 
         try:
             await self._app(scope, receive, send_with_status)
-            logger.info("http_request_completed", status_code=status_code)
+            outcome = _lifecycle_result(scope)
+            event_data = {
+                "route": route,
+                "trace_id": trace_id,
+                "status_code": status_code,
+                "duration_ms": _duration_ms(started_at),
+                **outcome,
+            }
+            if outcome.get("result_state", "completed") != "completed":
+                _log_response_failure(event_data)
+            else:
+                logger.info("http_request_completed", **event_data)
         except Exception:
-            logger.exception("http_request_failed")
+            logger.exception(
+                "http_request_failed",
+                route=route,
+                trace_id=trace_id,
+                result_state="failed",
+                status_code=status_code,
+                duration_ms=_duration_ms(started_at),
+            )
             raise
         finally:
             structlog.contextvars.clear_contextvars()
@@ -535,6 +576,29 @@ def _request_correlation_id(scope: Scope) -> str | None:
         return str(UUID(values[0]))
     except ValueError:
         return None
+
+
+def _set_lifecycle_result(scope: Scope, **values: str) -> None:
+    outcome = scope.setdefault("attendance_mcp.lifecycle_result", {})
+    outcome.update(values)
+
+
+def _lifecycle_result(scope: Scope) -> dict[str, str]:
+    return {"result_state": "completed"} | scope.get(
+        "attendance_mcp.lifecycle_result", {}
+    )
+
+
+def _duration_ms(started_at: float) -> int:
+    return round((perf_counter() - started_at) * 1000)
+
+
+def _log_response_failure(event_data: dict[str, object]) -> None:
+    status_code = event_data["status_code"]
+    if isinstance(status_code, int) and status_code >= 500:
+        logger.error("http_request_failed", **event_data)
+    else:
+        logger.warning("http_request_failed", **event_data)
 
 
 class _McpContractVersionMiddleware:

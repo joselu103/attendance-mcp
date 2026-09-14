@@ -170,6 +170,121 @@ async def test_mcp_rejects_missing_or_malformed_forwarded_headers(app) -> None:
 
 
 @pytest.mark.asyncio
+async def test_request_lifecycle_records_only_safe_admission_outcomes(
+    monkeypatch,
+) -> None:
+    events: list[tuple[str, str, dict[str, object]]] = []
+
+    class CapturingLogger:
+        def info(self, event: str, **values: object) -> None:
+            events.append(("info", event, values))
+
+        def warning(self, event: str, **values: object) -> None:
+            events.append(("warning", event, values))
+
+        def error(self, event: str, **values: object) -> None:
+            events.append(("error", event, values))
+
+        def exception(self, event: str, **values: object) -> None:
+            events.append(("exception", event, values))
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if (
+            request.headers["x-correlation-id"]
+            == "22222222-2222-2222-2222-222222222222"
+        ):
+            return httpx.Response(
+                403,
+                json={
+                    "code": "FORBIDDEN",
+                    "message": "You do not have permission to do that.",
+                },
+                headers={"X-Attendance-API-Contract-Version": "1.0.0"},
+            )
+        return httpx.Response(
+            204, headers={"X-Attendance-API-Contract-Version": "1.0.0"}
+        )
+
+    monkeypatch.setattr("attendance_mcp.app.logger", CapturingLogger())
+    initialize = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-03-26",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1"},
+        },
+    }
+    async with httpx.AsyncClient(
+        base_url="https://crmt.example", transport=httpx.MockTransport(handler)
+    ) as upstream:
+        app = create_app(
+            Settings(crmt_base_url="https://crmt.example"), client=upstream
+        )
+        async with (
+            app.router.lifespan_context(app),
+            httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
+            ) as client,
+        ):
+            await client.post("/mcp", json=initialize)
+            admitted = await client.post("/mcp", headers=HEADERS, json=initialize)
+            rejected = await client.post(
+                "/mcp",
+                headers={
+                    **HEADERS,
+                    "X-Correlation-ID": "22222222-2222-2222-2222-222222222222",
+                },
+                json=initialize,
+            )
+
+    assert admitted.status_code == 200
+    assert rejected.status_code == 403
+    outcomes = [
+        values for _, event, values in events if event != "http_request_received"
+    ]
+    assert outcomes[0] | {
+        "duration_ms": outcomes[0]["duration_ms"],
+        "trace_id": outcomes[0]["trace_id"],
+    } == {
+        "route": "/mcp",
+        "status_code": 401,
+        "result_state": "header_rejected",
+        "header_admission": "rejected",
+        "safe_error_code": "AUTHENTICATION_REQUIRED",
+        "duration_ms": outcomes[0]["duration_ms"],
+        "trace_id": outcomes[0]["trace_id"],
+    }
+    assert outcomes[1] | {"duration_ms": outcomes[1]["duration_ms"]} == {
+        "route": "/mcp",
+        "status_code": 200,
+        "result_state": "completed",
+        "header_admission": "accepted",
+        "crmt_admission": "admitted",
+        "duration_ms": outcomes[1]["duration_ms"],
+        "trace_id": HEADERS["X-Correlation-ID"],
+    }
+    assert outcomes[2] | {"duration_ms": outcomes[2]["duration_ms"]} == {
+        "route": "/mcp",
+        "status_code": 403,
+        "result_state": "session_rejected",
+        "header_admission": "accepted",
+        "crmt_admission": "rejected",
+        "safe_error_code": "FORBIDDEN",
+        "duration_ms": outcomes[2]["duration_ms"],
+        "trace_id": "22222222-2222-2222-2222-222222222222",
+    }
+    assert [
+        level for level, event, _ in events if event != "http_request_received"
+    ] == [
+        "warning",
+        "info",
+        "warning",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_administrative_tools_map_legacy_arguments_to_crmt(
     app, upstream_requests
 ) -> None:

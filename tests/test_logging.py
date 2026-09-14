@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from uuid import UUID
 
 import structlog
 from starlette.types import Message, Receive, Scope, Send
@@ -80,8 +81,60 @@ def test_request_middleware_clears_context_between_requests() -> None:
 
     asyncio.run(exercise())
 
-    assert seen == [{"correlation_id": "11111111-1111-1111-1111-111111111111"}, {}]
+    assert seen[0] == {"trace_id": "11111111-1111-1111-1111-111111111111"}
+    assert set(seen[1]) == {"trace_id"}
+    assert UUID(str(seen[1]["trace_id"]))
+    assert seen[1] != seen[0]
     assert structlog.contextvars.get_contextvars() == {}
+
+
+def test_request_lifecycle_logs_safe_health_events_with_a_generated_trace_id(
+    monkeypatch,
+) -> None:
+    events: list[tuple[str, str, dict[str, object]]] = []
+
+    class CapturingLogger:
+        def info(self, event: str, **values: object) -> None:
+            events.append(("info", event, values))
+
+        def warning(self, event: str, **values: object) -> None:
+            events.append(("warning", event, values))
+
+        def exception(self, event: str, **values: object) -> None:
+            events.append(("exception", event, values))
+
+    monkeypatch.setattr("attendance_mcp.app.logger", CapturingLogger())
+
+    async def application(_: Scope, __: Receive, send: Send) -> None:
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    async def exercise() -> None:
+        async def receive() -> Message:
+            return {"type": "http.disconnect"}
+
+        async def send(_: Message) -> None:
+            return None
+
+        await _RequestLoggingMiddleware(application)(
+            {"type": "http", "path": "/health", "headers": []}, receive, send
+        )
+
+    asyncio.run(exercise())
+
+    assert [(level, event) for level, event, _ in events] == [
+        ("info", "http_request_received"),
+        ("info", "http_request_completed"),
+    ]
+    trace_id = events[0][2]["trace_id"]
+    assert isinstance(trace_id, str)
+    assert UUID(trace_id)
+    assert events[0][2] == {"route": "/health", "trace_id": trace_id}
+    assert events[1][2]["route"] == "/health"
+    assert events[1][2]["trace_id"] == trace_id
+    assert events[1][2]["result_state"] == "completed"
+    assert events[1][2]["status_code"] == 200
+    assert isinstance(events[1][2]["duration_ms"], int)
 
 
 def test_redaction_is_recursive_and_does_not_mutate_caller_data() -> None:

@@ -2,23 +2,25 @@
 
 > **Status:** Completed
 >
-> **Objective:** Complete attendance-mcp#20 by establishing safe structlog
-> runtime logging with correlation-aware request context, environment-specific
-> rendering, and recursive redaction.
+> **Objective:** Complete attendance-mcp#21 by instrumenting public health and
+> Streamable HTTP MCP request admission and lifecycle events.
 >
 > **Contract context:** Preserve MCP contract `1.2.0` and the thin adapter
-> boundary. Never log delegated tokens, raw upstream payloads, or attendance
-> data. Bind only the admitted correlation ID for the lifetime of a request,
-> then clear context before the next request.
+> boundary. CRMT remains the sole authority for token validation, identity, and
+> authorization. Log only trace ID, route, duration, HTTP outcome, local header
+> admission outcome, and CRMT's safe admission result; never log headers,
+> tokens, sessions, identities, upstream payloads, or attendance data.
 >
-> **Verification:** Added six focused logging tests for renderer/level selection,
-> standard metadata, async correlation context cleanup, recursive non-mutating
-> redaction, and formatted exception redaction. Verified with `uv run pytest`
-> (17 passed), `uv run ruff check .`, and `uv run ruff format --check .`.
+> **Verification:** Added focused lifecycle/admission tests for generated health
+> traces, valid correlation trace binding, safe header rejection, CRMT admission,
+> and safe CRMT denial. Verified with `uv run pytest` (19 passed), `uv run ruff
+> check .`, and `uv run ruff format --check .`.
 >
-> **Definition of done:** Complete for #20's repository-owned structured logging
-> foundation. No external deployment, identity, audit, or CRMT integration
-> evidence is claimed.
+> **Definition of done:** Complete for #21's repository-owned request lifecycle
+> instrumentation: every public HTTP request has a safe received and
+> completed/failed lifecycle record, valid caller correlation IDs are trace IDs,
+> health and rejected requests use logging-only UUIDs, and header/admission
+> outcomes are covered without claiming authority owned by CRMT.
 
 The repository has been initialized with its agent operating documentation only.
 Before beginning an implementation slice, record an approved, bounded directive
