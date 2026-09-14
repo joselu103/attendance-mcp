@@ -2,26 +2,24 @@
 
 > **Status:** Completed
 >
-> **Objective:** Complete the repository-owned verification and publication
-> work for attendance-mcp#6: prove the standalone adapter's legacy MCP catalog,
-> Streamable HTTP behavior, header/correlation forwarding, and safe-error
-> behavior against the accepted CRMT REST v1 contract; publish its public
-> ownership and migration contract.
+> **Objective:** Complete attendance-mcp#23 by verifying the structured-logging
+> contract end to end and publishing evidence-backed local repository status.
 >
-> **Contract context:** Preserve MCP contract `1.2.0`; retain the canonical,
-> catalog, administrative, and reporting REST mappings while CRMT remains the
-> authority for identity, authorization, auditing, attendance behavior, and
-> safe errors. The adapter must forward only the delegated bearer and UUID
-> correlation ID unchanged.
+> **Contract context:** Preserve MCP contract `1.2.0`, allowed header
+> forwarding, and the thin adapter boundary. CRMT remains the authority for
+> token validation, identity, authorization, audit, and attendance behavior.
+> Verify only stable handlers and route templates, sanitized argument shapes,
+> durations, and safe outcomes; never log headers, values, tokens, identities,
+> URLs, query strings, request bodies, upstream payloads, or attendance data.
 >
-> **Verification:** The MCP/REST black-box catalog coverage and published
-> migration contract were verified with `uv run pytest` (11 passed), `uv run
-> ruff check .`, `uv run ruff format --check .`, and the local Docker build.
+> **Verification:** Added an end-to-end Streamable HTTP regression test spanning
+> an admitted requester tool call and its safe MCP/CRMT lifecycle events.
+> Verified with `uv run pytest` (35 passed), `uv run ruff check .`, and
+> `uv run ruff format --check .`.
 >
-> **Definition of done:** Complete for repository-owned documentation and local
-> fourteen-tool contract verification. Cross-service comparison of CRMT audit
-> records remains explicitly blocked until an authorized CRMT integration
-> environment is made available.
+> **Definition of done:** The local suite proves the safe logging contract across
+> the MCP tool and CRMT seam; the directive and `AGENT_STATE.json` record only
+> direct local evidence and retain all external readiness limitations.
 
 The repository has been initialized with its agent operating documentation only.
 Before beginning an implementation slice, record an approved, bounded directive

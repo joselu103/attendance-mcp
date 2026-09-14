@@ -170,6 +170,121 @@ async def test_mcp_rejects_missing_or_malformed_forwarded_headers(app) -> None:
 
 
 @pytest.mark.asyncio
+async def test_request_lifecycle_records_only_safe_admission_outcomes(
+    monkeypatch,
+) -> None:
+    events: list[tuple[str, str, dict[str, object]]] = []
+
+    class CapturingLogger:
+        def info(self, event: str, **values: object) -> None:
+            events.append(("info", event, values))
+
+        def warning(self, event: str, **values: object) -> None:
+            events.append(("warning", event, values))
+
+        def error(self, event: str, **values: object) -> None:
+            events.append(("error", event, values))
+
+        def exception(self, event: str, **values: object) -> None:
+            events.append(("exception", event, values))
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if (
+            request.headers["x-correlation-id"]
+            == "22222222-2222-2222-2222-222222222222"
+        ):
+            return httpx.Response(
+                403,
+                json={
+                    "code": "FORBIDDEN",
+                    "message": "You do not have permission to do that.",
+                },
+                headers={"X-Attendance-API-Contract-Version": "1.0.0"},
+            )
+        return httpx.Response(
+            204, headers={"X-Attendance-API-Contract-Version": "1.0.0"}
+        )
+
+    monkeypatch.setattr("attendance_mcp.app.logger", CapturingLogger())
+    initialize = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-03-26",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1"},
+        },
+    }
+    async with httpx.AsyncClient(
+        base_url="https://crmt.example", transport=httpx.MockTransport(handler)
+    ) as upstream:
+        app = create_app(
+            Settings(crmt_base_url="https://crmt.example"), client=upstream
+        )
+        async with (
+            app.router.lifespan_context(app),
+            httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
+            ) as client,
+        ):
+            await client.post("/mcp", json=initialize)
+            admitted = await client.post("/mcp", headers=HEADERS, json=initialize)
+            rejected = await client.post(
+                "/mcp",
+                headers={
+                    **HEADERS,
+                    "X-Correlation-ID": "22222222-2222-2222-2222-222222222222",
+                },
+                json=initialize,
+            )
+
+    assert admitted.status_code == 200
+    assert rejected.status_code == 403
+    outcomes = [
+        values for _, event, values in events if event != "http_request_received"
+    ]
+    assert outcomes[0] | {
+        "duration_ms": outcomes[0]["duration_ms"],
+        "trace_id": outcomes[0]["trace_id"],
+    } == {
+        "route": "/mcp",
+        "status_code": 401,
+        "result_state": "header_rejected",
+        "header_admission": "rejected",
+        "safe_error_code": "AUTHENTICATION_REQUIRED",
+        "duration_ms": outcomes[0]["duration_ms"],
+        "trace_id": outcomes[0]["trace_id"],
+    }
+    assert outcomes[1] | {"duration_ms": outcomes[1]["duration_ms"]} == {
+        "route": "/mcp",
+        "status_code": 200,
+        "result_state": "completed",
+        "header_admission": "accepted",
+        "crmt_admission": "admitted",
+        "duration_ms": outcomes[1]["duration_ms"],
+        "trace_id": HEADERS["X-Correlation-ID"],
+    }
+    assert outcomes[2] | {"duration_ms": outcomes[2]["duration_ms"]} == {
+        "route": "/mcp",
+        "status_code": 403,
+        "result_state": "session_rejected",
+        "header_admission": "accepted",
+        "crmt_admission": "rejected",
+        "safe_error_code": "FORBIDDEN",
+        "duration_ms": outcomes[2]["duration_ms"],
+        "trace_id": "22222222-2222-2222-2222-222222222222",
+    }
+    assert [
+        level for level, event, _ in events if event != "http_request_received"
+    ] == [
+        "warning",
+        "info",
+        "warning",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_administrative_tools_map_legacy_arguments_to_crmt(
     app, upstream_requests
 ) -> None:
@@ -433,3 +548,103 @@ async def test_catalog_includes_read_only_reporting_tools(app) -> None:
         "get_exceptions",
         "get_organization_attendance_analysis",
     } <= names
+
+
+@pytest.mark.asyncio
+async def test_tool_call_logs_safe_mcp_and_crmt_lifecycles_end_to_end(
+    app, monkeypatch
+) -> None:
+    mcp_events: list[tuple[str, dict[str, object]]] = []
+    crmt_events: list[tuple[str, dict[str, object]]] = []
+
+    class CapturingLogger:
+        def __init__(self, events: list[tuple[str, dict[str, object]]]) -> None:
+            self._events = events
+
+        def info(self, event: str, **values: object) -> None:
+            self._events.append((event, values))
+
+        def warning(self, event: str, **values: object) -> None:
+            self._events.append((event, values))
+
+    monkeypatch.setattr("attendance_mcp.app.logger", CapturingLogger(mcp_events))
+    monkeypatch.setattr(
+        "attendance_mcp.rest_client.logger", CapturingLogger(crmt_events)
+    )
+    initialize = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-03-26",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1"},
+        },
+    }
+    async with (
+        app.router.lifespan_context(app),
+        httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
+        ) as client,
+    ):
+        initialized = await client.post("/mcp", headers=HEADERS, json=initialize)
+        session_headers = {
+            **HEADERS,
+            "Mcp-Session-Id": initialized.headers["Mcp-Session-Id"],
+        }
+        await client.post(
+            "/mcp",
+            headers=session_headers,
+            json={
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized",
+                "params": {},
+            },
+        )
+        response = await client.post(
+            "/mcp",
+            headers=session_headers,
+            json={
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {
+                    "name": "list_my_attendance_events",
+                    "arguments": {
+                        "start_date": "2026-08-01",
+                        "end_date": "2026-08-02",
+                    },
+                },
+            },
+        )
+
+    assert response.status_code == 200
+    tool_events = [event for event in mcp_events if event[0].startswith("mcp_tool_")]
+    assert [event for event, _ in tool_events] == [
+        "mcp_tool_operation_started",
+        "mcp_tool_operation_step_completed",
+        "mcp_tool_operation_succeeded",
+    ]
+    assert all(
+        values["handler"] == "list_my_attendance_events" for _, values in tool_events
+    )
+    assert all(
+        values["input_shape"]
+        == ("start_date:date", "end_date:date", "limit:int", "offset:int")
+        for _, values in tool_events
+    )
+    operation_events = [
+        event
+        for event in crmt_events
+        if event[0].startswith("crmt_operation_")
+        and event[1].get("operation") == "list_my_attendance_events"
+    ]
+    assert [event for event, _ in operation_events] == [
+        "crmt_operation_started",
+        "crmt_operation_succeeded",
+    ]
+    assert all(
+        values["operation"] == "list_my_attendance_events"
+        and values["route_template"] == "/api/v1/me/attendance-events"
+        for _, values in operation_events
+    )

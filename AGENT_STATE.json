@@ -34,6 +34,9 @@
     "Local adapter tests verify the fourteen-tool canonical requester, catalog, administrative, and reporting MCP inventory; route/argument mappings; MCP schemas; contract-version headers; allowed header propagation; CRMT safe-error filtering; session admission; and public liveness.",
     "The repository-owned migration contract identifies Attendance MCP as the public Streamable HTTP owner and CRMT REST as its private authority while preserving MCP contract 1.2.0.",
     "The local Docker image attendance-mcp:local-test builds successfully from the merged adapter source.",
+    "Structured runtime logging is locally verified with development console DEBUG output, non-local JSON INFO output, UTC and callsite metadata, request-scoped trace context, and recursive redaction of configured sensitive keys and values.",
+    "Public health and MCP HTTP lifecycle instrumentation is locally verified: received and completed/failed events include a valid or logging-only UUID trace ID, route, status, duration, safe local header-admission outcome, and safe CRMT admission outcome.",
+    "All fourteen read-only MCP tools and their sole CRMT REST-client seam are locally instrumented with value-free operation lifecycles: stable handler or operation labels, sanitized input shapes or route templates, timing, and safe outcomes. An in-process Streamable HTTP regression verifies an admitted requester tool call emits the corresponding safe MCP and CRMT lifecycle events. Verified with 35 local tests.",
     "No authorized non-production deployment, Entra/OBO, CRMT audit-record comparison, or end-to-end embedded-bridge parity evidence exists; local implementation does not clear these external gates."
   ]
 }

@@ -1,7 +1,121 @@
 import httpx
 import pytest
 
-from attendance_mcp.rest_client import CrmtRestClient, RestFailure
+from attendance_mcp.rest_client import CrmtRestClient, RestFailure, _operation_metadata
+
+
+@pytest.mark.parametrize(
+    ("path", "operation", "route_template"),
+    [
+        (
+            "/api/v1/me/attendance-events",
+            "list_my_attendance_events",
+            "/api/v1/me/attendance-events",
+        ),
+        ("/api/v1/employees", "list_employees", "/api/v1/employees"),
+        ("/api/v1/employees/42", "get_employee", "/api/v1/employees/{employee_id}"),
+        ("/api/v1/punch-types", "list_punch_types", "/api/v1/punch-types"),
+        ("/api/v1/locations", "list_locations", "/api/v1/locations"),
+        (
+            "/api/v1/employees/42/attendance-events",
+            "list_attendance_events",
+            "/api/v1/employees/{employee_id}/attendance-events",
+        ),
+        (
+            "/api/v1/attendance-events/100",
+            "get_attendance_event",
+            "/api/v1/attendance-events/{attendance_event_id}",
+        ),
+        (
+            "/api/v1/employees/42/daily-attendance",
+            "get_daily_attendance",
+            "/api/v1/employees/{employee_id}/daily-attendance",
+        ),
+        (
+            "/api/v1/employees/42/planned-work",
+            "get_planned_work",
+            "/api/v1/employees/{employee_id}/planned-work",
+        ),
+        (
+            "/api/v1/attendance/current",
+            "get_current_attendance",
+            "/api/v1/attendance/current",
+        ),
+        (
+            "/api/v1/employees/42/attendance-analysis",
+            "get_employee_attendance_analysis",
+            "/api/v1/employees/{employee_id}/attendance-analysis",
+        ),
+        (
+            "/api/v1/employees/42/attendance-summary",
+            "get_employee_attendance_summary",
+            "/api/v1/employees/{employee_id}/attendance-summary",
+        ),
+        (
+            "/api/v1/attendance/exceptions",
+            "get_exceptions",
+            "/api/v1/attendance/exceptions",
+        ),
+        (
+            "/api/v1/attendance/organization-analysis",
+            "get_organization_attendance_analysis",
+            "/api/v1/attendance/organization-analysis",
+        ),
+    ],
+)
+def test_rest_operation_metadata_covers_the_complete_tool_catalog(
+    path: str, operation: str, route_template: str
+) -> None:
+    assert _operation_metadata("GET", path) == (operation, route_template)
+
+
+@pytest.mark.asyncio
+async def test_rest_client_logs_stable_operation_and_route_template_only(
+    monkeypatch,
+) -> None:
+    events: list[tuple[str, dict[str, object]]] = []
+
+    class CapturingLogger:
+        def info(self, event: str, **values: object) -> None:
+            events.append((event, values))
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"items": []},
+            headers={"X-Attendance-API-Contract-Version": "1.0.0"},
+        )
+
+    monkeypatch.setattr("attendance_mcp.rest_client.logger", CapturingLogger())
+    async with httpx.AsyncClient(
+        base_url="https://crmt.example", transport=httpx.MockTransport(handler)
+    ) as http_client:
+        await CrmtRestClient(client=http_client).get_employee_attendance_analysis(
+            employee_id=42,
+            headers={
+                "Authorization": "Bearer delegated-token",
+                "X-Correlation-ID": "11111111-1111-1111-1111-111111111111",
+            },
+            params={"start_date": "2026-08-01", "end_date": "2026-08-02"},
+        )
+
+    assert [event for event, _ in events] == [
+        "crmt_operation_started",
+        "crmt_operation_succeeded",
+    ]
+    assert events[0][1] == {
+        "operation": "get_employee_attendance_analysis",
+        "method": "GET",
+        "route_template": "/api/v1/employees/{employee_id}/attendance-analysis",
+    }
+    assert events[1][1] | {"duration_ms": events[1][1]["duration_ms"]} == {
+        "operation": "get_employee_attendance_analysis",
+        "method": "GET",
+        "route_template": "/api/v1/employees/{employee_id}/attendance-analysis",
+        "outcome": "succeeded",
+        "status_code": 200,
+        "duration_ms": events[1][1]["duration_ms"],
+    }
 
 
 @pytest.mark.asyncio

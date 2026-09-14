@@ -3,10 +3,13 @@
 import json
 from contextlib import asynccontextmanager
 from datetime import date, datetime
+from functools import wraps
+from time import perf_counter
 from typing import Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
+import structlog
 from fastmcp import Context, FastMCP
 from fastmcp.exceptions import ToolError
 from starlette.applications import Starlette
@@ -26,6 +29,7 @@ from attendance_mcp.settings import Settings
 
 MCP_CONTRACT_VERSION = "1.2.0"
 MCP_CONTRACT_VERSION_HEADER = "X-Attendance-MCP-Contract-Version"
+logger = structlog.get_logger(__name__)
 
 
 def create_app(
@@ -50,6 +54,10 @@ def create_app(
             "inclusive calendar days. Employee identity is resolved by the server; "
             "limit must be from 1 through 100 and offset must be nonnegative."
         ),
+    )
+    @_instrument_tool(
+        "list_my_attendance_events",
+        ("start_date:date", "end_date:date", "limit:int", "offset:int"),
     )
     async def list_my_attendance_events(
         start_date: date,
@@ -84,6 +92,7 @@ def create_app(
             "records are excluded. Results use bounded limit/offset pagination."
         ),
     )
+    @_instrument_tool("list_employees", ("limit:int", "offset:int"))
     async def list_employees(
         limit: int = 50, offset: int = 0, ctx: Context | None = None
     ) -> dict[str, object]:
@@ -104,6 +113,7 @@ def create_app(
         name="get_employee",
         description="Return one employee's directory-safe metadata by ID.",
     )
+    @_instrument_tool("get_employee", ("employee_id:int",))
     async def get_employee(
         employee_id: int, ctx: Context | None = None
     ) -> dict[str, object]:
@@ -126,6 +136,7 @@ def create_app(
             "Locations are reference data, not caller-selected input."
         ),
     )
+    @_instrument_tool("list_punch_types", ("active_only:bool",))
     async def list_punch_types(
         active_only: bool = True, ctx: Context | None = None
     ) -> list[object]:
@@ -145,6 +156,7 @@ def create_app(
         name="list_locations",
         description="List attendance-event location reference data.",
     )
+    @_instrument_tool("list_locations", ())
     async def list_locations(ctx: Context | None = None) -> list[object]:
         """Map the legacy location lookup to CRMT REST."""
         try:
@@ -163,6 +175,16 @@ def create_app(
         description=(
             "List one employee's attendance events in a bounded date range. "
             "This MVP tool is available only to the server-configured admin requester."
+        ),
+    )
+    @_instrument_tool(
+        "list_attendance_events",
+        (
+            "employee_id:int",
+            "start_date:date",
+            "end_date:date",
+            "limit:int",
+            "offset:int",
         ),
     )
     async def list_attendance_events(
@@ -196,6 +218,7 @@ def create_app(
         name="get_attendance_event",
         description="Return one attendance event, including recorded audit metadata.",
     )
+    @_instrument_tool("get_attendance_event", ("attendance_event_id:int",))
     async def get_attendance_event(
         attendance_event_id: int, ctx: Context | None = None
     ) -> dict[str, object]:
@@ -219,6 +242,7 @@ def create_app(
             "calculated planned-versus-logged outcome."
         ),
     )
+    @_instrument_tool("get_daily_attendance", ("employee_id:int", "day:date"))
     async def get_daily_attendance(
         employee_id: int, day: date, ctx: Context | None = None
     ) -> dict[str, object]:
@@ -243,6 +267,9 @@ def create_app(
             "inclusive Europe/Ljubljana range of up to 31 calendar days."
         ),
     )
+    @_instrument_tool(
+        "get_planned_work", ("employee_id:int", "start_date:date", "end_date:date")
+    )
     async def get_planned_work(
         employee_id: int,
         start_date: date,
@@ -264,6 +291,10 @@ def create_app(
             ) from None
 
     @mcp.tool(name="get_current_attendance", annotations={"readOnlyHint": True})
+    @_instrument_tool(
+        "get_current_attendance",
+        ("as_of:datetime?", "status:string?", "limit:int", "offset:int"),
+    )
     async def get_current_attendance(
         as_of: datetime | None = None,
         status: Literal[
@@ -296,6 +327,10 @@ def create_app(
     @mcp.tool(
         name="get_employee_attendance_analysis", annotations={"readOnlyHint": True}
     )
+    @_instrument_tool(
+        "get_employee_attendance_analysis",
+        ("employee_id:int", "start_date:date", "end_date:date"),
+    )
     async def get_employee_attendance_analysis(
         employee_id: int, start_date: date, end_date: date, ctx: Context | None = None
     ) -> dict[str, object]:
@@ -311,6 +346,10 @@ def create_app(
     @mcp.tool(
         name="get_employee_attendance_summary", annotations={"readOnlyHint": True}
     )
+    @_instrument_tool(
+        "get_employee_attendance_summary",
+        ("employee_id:int", "start_date:date", "end_date:date"),
+    )
     async def get_employee_attendance_summary(
         employee_id: int, start_date: date, end_date: date, ctx: Context | None = None
     ) -> dict[str, object]:
@@ -324,6 +363,16 @@ def create_app(
         )
 
     @mcp.tool(name="get_exceptions", annotations={"readOnlyHint": True})
+    @_instrument_tool(
+        "get_exceptions",
+        (
+            "start_date:date",
+            "end_date:date",
+            "employee_ids:list?",
+            "limit:int",
+            "offset:int",
+        ),
+    )
     async def get_exceptions(
         start_date: date,
         end_date: date,
@@ -348,6 +397,10 @@ def create_app(
 
     @mcp.tool(
         name="get_organization_attendance_analysis", annotations={"readOnlyHint": True}
+    )
+    @_instrument_tool(
+        "get_organization_attendance_analysis",
+        ("start_date:date", "end_date:date", "limit:int", "offset:int"),
     )
     async def get_organization_attendance_analysis(
         start_date: date,
@@ -394,11 +447,58 @@ def create_app(
     )
     app.add_middleware(_AdmissionMiddleware, rest_client=rest_client)
     app.add_middleware(_McpContractVersionMiddleware)
+    app.add_middleware(_RequestLoggingMiddleware)
     return app
 
 
 async def _health(_: Request) -> JSONResponse:
     return JSONResponse({"status": "ok"})
+
+
+def _instrument_tool(handler: str, input_shape: tuple[str, ...]):
+    """Record a tool lifecycle without retaining caller values or tool results."""
+
+    def decorate(operation: Any) -> Any:
+        @wraps(operation)
+        async def instrumented(*args: Any, **kwargs: Any) -> Any:
+            started_at = perf_counter()
+            logger.info(
+                "mcp_tool_operation_started",
+                handler=handler,
+                step="invocation",
+                input_shape=input_shape,
+            )
+            try:
+                result = await operation(*args, **kwargs)
+            except Exception as error:
+                logger.warning(
+                    "mcp_tool_operation_failed",
+                    handler=handler,
+                    step="crmt_rest_call",
+                    input_shape=input_shape,
+                    duration_ms=_duration_ms(started_at),
+                    error_type=type(error).__name__,
+                )
+                raise
+            logger.info(
+                "mcp_tool_operation_step_completed",
+                handler=handler,
+                step="crmt_rest_call",
+                input_shape=input_shape,
+                duration_ms=_duration_ms(started_at),
+            )
+            logger.info(
+                "mcp_tool_operation_succeeded",
+                handler=handler,
+                step="completed",
+                input_shape=input_shape,
+                duration_ms=_duration_ms(started_at),
+            )
+            return result
+
+        return instrumented
+
+    return decorate
 
 
 def _context_request(ctx: Context | None) -> Request:
@@ -458,6 +558,12 @@ class _AdmissionMiddleware:
         try:
             headers = _forward_headers(request)
         except HeaderFailure as failure:
+            _set_lifecycle_result(
+                scope,
+                result_state="header_rejected",
+                header_admission="rejected",
+                safe_error_code=failure.code,
+            )
             status_code = (
                 401
                 if failure.code in {"AUTHENTICATION_REQUIRED", "TOKEN_INVALID"}
@@ -468,8 +574,15 @@ class _AdmissionMiddleware:
             )
             return
 
+        _set_lifecycle_result(scope, header_admission="accepted")
+
         body = await request.body()
         if len(body) > 65536:
+            _set_lifecycle_result(
+                scope,
+                result_state="request_rejected",
+                safe_error_code="INVALID_ARGUMENT",
+            )
             await _send_safe_error(
                 scope, send, SafeError.for_code("INVALID_ARGUMENT"), 400
             )
@@ -478,8 +591,15 @@ class _AdmissionMiddleware:
             try:
                 await self._rest_client.admit_session(headers)
             except RestFailure as failure:
+                _set_lifecycle_result(
+                    scope,
+                    result_state="session_rejected",
+                    crmt_admission="rejected",
+                    safe_error_code=failure.error.code,
+                )
                 await _send_safe_error(scope, send, failure.error, failure.status_code)
                 return
+            _set_lifecycle_result(scope, crmt_admission="admitted")
 
         sent = False
 
@@ -491,6 +611,95 @@ class _AdmissionMiddleware:
             return {"type": "http.request", "body": body, "more_body": False}
 
         await self._app(scope, replay, send)
+
+
+class _RequestLoggingMiddleware:
+    """Record safe public HTTP lifecycle events with a per-request trace ID."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+        structlog.contextvars.clear_contextvars()
+        trace_id = _request_correlation_id(scope) or str(uuid4())
+        structlog.contextvars.bind_contextvars(trace_id=trace_id)
+        route = scope.get("path", "")
+        started_at = perf_counter()
+        status_code: int | None = None
+        logger.info("http_request_received", route=route, trace_id=trace_id)
+
+        async def send_with_status(message: Message) -> None:
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
+            await send(message)
+
+        try:
+            await self._app(scope, receive, send_with_status)
+            outcome = _lifecycle_result(scope)
+            event_data = {
+                "route": route,
+                "trace_id": trace_id,
+                "status_code": status_code,
+                "duration_ms": _duration_ms(started_at),
+                **outcome,
+            }
+            if outcome.get("result_state", "completed") != "completed":
+                _log_response_failure(event_data)
+            else:
+                logger.info("http_request_completed", **event_data)
+        except Exception:
+            logger.exception(
+                "http_request_failed",
+                route=route,
+                trace_id=trace_id,
+                result_state="failed",
+                status_code=status_code,
+                duration_ms=_duration_ms(started_at),
+            )
+            raise
+        finally:
+            structlog.contextvars.clear_contextvars()
+
+
+def _request_correlation_id(scope: Scope) -> str | None:
+    values = [
+        value.decode("latin-1")
+        for name, value in scope.get("headers", [])
+        if name.lower() == CORRELATION_ID_HEADER.lower().encode()
+    ]
+    if len(values) != 1:
+        return None
+    try:
+        return str(UUID(values[0]))
+    except ValueError:
+        return None
+
+
+def _set_lifecycle_result(scope: Scope, **values: str) -> None:
+    outcome = scope.setdefault("attendance_mcp.lifecycle_result", {})
+    outcome.update(values)
+
+
+def _lifecycle_result(scope: Scope) -> dict[str, str]:
+    return {"result_state": "completed"} | scope.get(
+        "attendance_mcp.lifecycle_result", {}
+    )
+
+
+def _duration_ms(started_at: float) -> int:
+    return round((perf_counter() - started_at) * 1000)
+
+
+def _log_response_failure(event_data: dict[str, object]) -> None:
+    status_code = event_data["status_code"]
+    if isinstance(status_code, int) and status_code >= 500:
+        logger.error("http_request_failed", **event_data)
+    else:
+        logger.warning("http_request_failed", **event_data)
 
 
 class _McpContractVersionMiddleware:
