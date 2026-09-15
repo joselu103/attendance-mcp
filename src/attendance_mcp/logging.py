@@ -3,6 +3,7 @@
 import logging
 import sys
 from collections.abc import Iterable, Mapping
+from copy import deepcopy
 from typing import Any
 
 import structlog
@@ -26,12 +27,14 @@ DEFAULT_SENSITIVE_KEYS = frozenset(
 def configure_logging(
     *,
     environment: str,
+    external_debug: bool = False,
     sensitive_keys: Iterable[str] = (),
     sensitive_values: Iterable[str] = (),
 ) -> None:
     """Configure deterministic, safe output for the active runtime environment."""
     is_local = environment.casefold() in {"local", "development"}
-    level = logging.DEBUG if is_local else logging.INFO
+    adapter_level = logging.DEBUG if is_local else logging.INFO
+    external_level = logging.DEBUG if external_debug else logging.WARNING
     renderer: structlog.types.Processor = (
         structlog.dev.ConsoleRenderer(colors=True)
         if is_local
@@ -39,14 +42,27 @@ def configure_logging(
     )
     processors = _shared_processors(sensitive_keys, sensitive_values) + [renderer]
     logging.basicConfig(
-        format="%(message)s", stream=sys.stdout, level=level, force=True
+        format="%(message)s", stream=sys.stdout, level=external_level, force=True
     )
+    logging.getLogger("fastmcp").setLevel(external_level)
     structlog.configure(
         processors=processors,
-        wrapper_class=structlog.make_filtering_bound_logger(level),
+        wrapper_class=structlog.make_filtering_bound_logger(adapter_level),
         logger_factory=structlog.PrintLoggerFactory(file=sys.stdout),
         cache_logger_on_first_use=False,
     )
+
+
+def uvicorn_log_config(*, external_debug: bool) -> dict[str, Any]:
+    """Keep one access record while applying the external logging policy."""
+    from uvicorn.config import LOGGING_CONFIG
+
+    config = deepcopy(LOGGING_CONFIG)
+    external_level = "DEBUG" if external_debug else "WARNING"
+    config["loggers"]["uvicorn"]["level"] = external_level
+    config["loggers"]["uvicorn.error"]["level"] = external_level
+    config["loggers"]["uvicorn.access"]["level"] = "INFO"
+    return config
 
 
 def _shared_processors(

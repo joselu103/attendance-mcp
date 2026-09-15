@@ -6,15 +6,22 @@ import structlog
 from starlette.types import Message, Receive, Scope, Send
 
 from attendance_mcp.app import _RequestLoggingMiddleware
-from attendance_mcp.logging import REDACTED, _redactor, configure_logging
+from attendance_mcp.logging import (
+    REDACTED,
+    _redactor,
+    configure_logging,
+    uvicorn_log_config,
+)
 
 
-def test_local_logging_uses_debug_console_renderer() -> None:
+def test_local_logging_uses_debug_console_renderer_and_quiet_external_logs() -> None:
     configure_logging(environment="development")
 
     config = structlog.get_config()
 
-    assert logging.getLogger().level == logging.DEBUG
+    assert logging.getLogger().level == logging.WARNING
+    assert logging.getLogger("httpcore").getEffectiveLevel() == logging.WARNING
+    assert logging.getLogger("fastmcp").getEffectiveLevel() == logging.WARNING
     assert type(config["processors"][-1]) is structlog.dev.ConsoleRenderer
     assert config["processors"][-1]._colors is True
 
@@ -24,8 +31,24 @@ def test_non_local_logging_uses_info_json_renderer() -> None:
 
     config = structlog.get_config()
 
-    assert logging.getLogger().level == logging.INFO
+    assert logging.getLogger().level == logging.WARNING
     assert type(config["processors"][-1]) is structlog.processors.JSONRenderer
+
+
+def test_external_debug_opt_in_enables_external_loggers() -> None:
+    configure_logging(environment="development", external_debug=True)
+
+    assert logging.getLogger().level == logging.DEBUG
+    assert logging.getLogger("httpcore").getEffectiveLevel() == logging.DEBUG
+    assert logging.getLogger("fastmcp").getEffectiveLevel() == logging.DEBUG
+
+
+def test_uvicorn_config_keeps_access_logs_and_quiets_framework_logs() -> None:
+    config = uvicorn_log_config(external_debug=False)
+
+    assert config["loggers"]["uvicorn"]["level"] == "WARNING"
+    assert config["loggers"]["uvicorn.error"]["level"] == "WARNING"
+    assert config["loggers"]["uvicorn.access"]["level"] == "INFO"
 
 
 def test_standard_metadata_and_context_flow_across_async_work_then_clear() -> None:
