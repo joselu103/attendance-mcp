@@ -2,23 +2,25 @@
 
 > **Status:** Completed
 >
-> **Objective:** Apply project-owned runtime logging: preserve safe structured
-> adapter lifecycle telemetry and one Uvicorn access record while suppressing
-> routine external-library diagnostics by default.
+> **Objective:** Deepen the internal MCP tool-call policy so all fourteen typed
+> read-only tool handlers share header acquisition, REST-to-MCP safe-error
+> translation, and value-free lifecycle logging.
 >
 > **Contract context:** Preserve MCP contract `1.2.0`, Streamable HTTP behavior,
-> allowed header forwarding, and all safe logging/redaction guarantees. CRMT
-> remains the authority for token validation, identity, authorization, audit,
-> and attendance behavior. Do not use secrets, SQL Server, raw attendance data,
-> or external deployments.
+> tool names, schemas, defaults, descriptions, routes, allow-listed header
+> forwarding, and all safe logging/redaction guarantees. `CrmtRestClient`
+> remains the sole REST-client seam; CRMT remains the authority for token
+> validation, identity, authorization, audit, and attendance behavior. Do not
+> use secrets, SQL Server, raw attendance data, or external deployments.
 >
-> **Verification:** Added focused logging coverage. Verified with `uv run pytest`
-> (38 passed), `uv run ruff check .`, and `uv run ruff format --check .`.
+> **Verification:** Added MCP-level reporting route and header-forwarding
+> coverage. Verified with `uv run pytest` (39 passed), `uv run ruff check .`,
+> and `uv run ruff format --check .`.
 >
-> **Definition of done:** Completed locally: adapter logs remain structured and safe; ordinary
-> third-party output is quiet by default; an explicitly enabled non-secret
-> diagnostic setting restores external DEBUG logging; Uvicorn retains exactly
-> one access record per request.
+> **Definition of done:** Completed locally: a private policy module derives
+> safe handler metadata from the actual typed handler interface and centrally
+> invokes CRMT operations, while every public tool preserves its frozen MCP
+> contract and verified behavior.
 
 The repository has been initialized with its agent operating documentation only.
 Before beginning an implementation slice, record an approved, bounded directive

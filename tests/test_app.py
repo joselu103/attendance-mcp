@@ -591,6 +591,152 @@ async def test_catalog_includes_read_only_reporting_tools(app) -> None:
 
 
 @pytest.mark.asyncio
+async def test_reporting_tools_map_legacy_arguments_to_crmt(
+    app, upstream_requests
+) -> None:
+    async with (
+        app.router.lifespan_context(app),
+        httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
+        ) as client,
+    ):
+        await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "test", "version": "1"},
+                },
+            },
+        )
+        await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized",
+                "params": {},
+            },
+        )
+        calls = [
+            (
+                "get_current_attendance",
+                {
+                    "as_of": "2026-08-10T08:30:00",
+                    "status": "office",
+                    "limit": 20,
+                    "offset": 3,
+                },
+            ),
+            (
+                "get_employee_attendance_analysis",
+                {
+                    "employee_id": 42,
+                    "start_date": "2026-08-10",
+                    "end_date": "2026-08-12",
+                },
+            ),
+            (
+                "get_employee_attendance_summary",
+                {
+                    "employee_id": 42,
+                    "start_date": "2026-08-10",
+                    "end_date": "2026-08-12",
+                },
+            ),
+            (
+                "get_exceptions",
+                {
+                    "start_date": "2026-08-10",
+                    "end_date": "2026-08-12",
+                    "employee_ids": [42, 43],
+                    "limit": 20,
+                    "offset": 3,
+                },
+            ),
+            (
+                "get_organization_attendance_analysis",
+                {
+                    "start_date": "2026-08-10",
+                    "end_date": "2026-08-12",
+                    "limit": 20,
+                    "offset": 3,
+                },
+            ),
+        ]
+        responses = [
+            await client.post(
+                "/mcp",
+                headers=HEADERS,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": index + 2,
+                    "method": "tools/call",
+                    "params": {"name": name, "arguments": arguments},
+                },
+            )
+            for index, (name, arguments) in enumerate(calls)
+        ]
+
+    assert all(
+        response.json()["result"].get("isError") is not True for response in responses
+    )
+    requests = upstream_requests[1:]
+    assert [
+        (request.url.path, list(request.url.params.multi_items()))
+        for request in requests
+    ] == [
+        (
+            "/api/v1/attendance/current",
+            [
+                ("as_of", "2026-08-10T08:30:00"),
+                ("status", "office"),
+                ("limit", "20"),
+                ("offset", "3"),
+            ],
+        ),
+        (
+            "/api/v1/employees/42/attendance-analysis",
+            [("start_date", "2026-08-10"), ("end_date", "2026-08-12")],
+        ),
+        (
+            "/api/v1/employees/42/attendance-summary",
+            [("start_date", "2026-08-10"), ("end_date", "2026-08-12")],
+        ),
+        (
+            "/api/v1/attendance/exceptions",
+            [
+                ("start_date", "2026-08-10"),
+                ("end_date", "2026-08-12"),
+                ("employee_ids", "42"),
+                ("employee_ids", "43"),
+                ("limit", "20"),
+                ("offset", "3"),
+            ],
+        ),
+        (
+            "/api/v1/attendance/organization-analysis",
+            [
+                ("start_date", "2026-08-10"),
+                ("end_date", "2026-08-12"),
+                ("limit", "20"),
+                ("offset", "3"),
+            ],
+        ),
+    ]
+    assert all(
+        request.headers["authorization"] == HEADERS["Authorization"]
+        and request.headers["x-correlation-id"] == HEADERS["X-Correlation-ID"]
+        for request in requests
+    )
+
+
+@pytest.mark.asyncio
 async def test_tool_call_logs_safe_mcp_and_crmt_lifecycles_end_to_end(
     app, monkeypatch
 ) -> None:
@@ -607,7 +753,9 @@ async def test_tool_call_logs_safe_mcp_and_crmt_lifecycles_end_to_end(
         def warning(self, event: str, **values: object) -> None:
             self._events.append((event, values))
 
-    monkeypatch.setattr("attendance_mcp.app.logger", CapturingLogger(mcp_events))
+    monkeypatch.setattr(
+        "attendance_mcp.tool_policy.logger", CapturingLogger(mcp_events)
+    )
     monkeypatch.setattr(
         "attendance_mcp.rest_client.logger", CapturingLogger(crmt_events)
     )

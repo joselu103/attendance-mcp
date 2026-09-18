@@ -3,7 +3,6 @@
 import json
 from contextlib import asynccontextmanager
 from datetime import date, datetime
-from functools import wraps
 from time import perf_counter
 from typing import Any, Literal
 from uuid import UUID, uuid4
@@ -11,7 +10,6 @@ from uuid import UUID, uuid4
 import httpx
 import structlog
 from fastmcp import Context, FastMCP
-from fastmcp.exceptions import ToolError
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -20,12 +18,12 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from attendance_mcp.contracts import SafeError
 from attendance_mcp.rest_client import (
-    AUTHORIZATION_HEADER,
     CORRELATION_ID_HEADER,
     CrmtRestClient,
     RestFailure,
 )
 from attendance_mcp.settings import Settings
+from attendance_mcp.tool_policy import HeaderFailure, ToolCallPolicy, forward_headers
 
 MCP_CONTRACT_VERSION = "1.2.0"
 MCP_CONTRACT_VERSION_HEADER = "X-Attendance-MCP-Contract-Version"
@@ -46,6 +44,7 @@ def create_app(
         )
     )
     mcp = FastMCP("Attendance MCP", version=MCP_CONTRACT_VERSION)
+    tool_call_policy = ToolCallPolicy()
 
     @mcp.tool(
         name="list_my_attendance_events",
@@ -56,10 +55,7 @@ def create_app(
             "limit must be from 1 through 100 and offset must be nonnegative."
         ),
     )
-    @_instrument_tool(
-        "list_my_attendance_events",
-        ("start_date:date", "end_date:date", "limit:int", "offset:int"),
-    )
+    @tool_call_policy.instrument
     async def list_my_attendance_events(
         start_date: date,
         end_date: date,
@@ -68,9 +64,9 @@ def create_app(
         ctx: Context | None = None,
     ) -> dict[str, object]:
         """Map the frozen legacy MCP request directly to its CRMT REST operation."""
-        try:
-            headers = _forward_headers(_context_request(ctx))
-            return await rest_client.list_my_attendance_events(
+        return await tool_call_policy.call(
+            ctx,
+            lambda headers: rest_client.list_my_attendance_events(
                 headers=headers,
                 params={
                     "start_date": start_date,
@@ -78,13 +74,8 @@ def create_app(
                     "limit": limit,
                     "offset": offset,
                 },
-            )
-        except RestFailure as failure:
-            raise ToolError(failure.error.model_dump_json()) from None
-        except ValueError:
-            raise ToolError(
-                SafeError.for_code("INTERNAL_ERROR").model_dump_json()
-            ) from None
+            ),
+        )
 
     @mcp.tool(
         name="list_employees",
@@ -94,43 +85,35 @@ def create_app(
             "records are excluded. Results use bounded limit/offset pagination."
         ),
     )
-    @_instrument_tool("list_employees", ("limit:int", "offset:int"))
+    @tool_call_policy.instrument
     async def list_employees(
         limit: int = 50, offset: int = 0, ctx: Context | None = None
     ) -> dict[str, object]:
         """Map the legacy active-employee page to CRMT REST."""
-        try:
-            return await rest_client.list_employees(
-                headers=_forward_headers(_context_request(ctx)),
+        return await tool_call_policy.call(
+            ctx,
+            lambda headers: rest_client.list_employees(
+                headers=headers,
                 params={"limit": limit, "offset": offset},
-            )
-        except RestFailure as failure:
-            raise ToolError(failure.error.model_dump_json()) from None
-        except ValueError:
-            raise ToolError(
-                SafeError.for_code("INTERNAL_ERROR").model_dump_json()
-            ) from None
+            ),
+        )
 
     @mcp.tool(
         name="get_employee",
         annotations={"readOnlyHint": True},
         description="Return one employee's directory-safe metadata by ID.",
     )
-    @_instrument_tool("get_employee", ("employee_id:int",))
+    @tool_call_policy.instrument
     async def get_employee(
         employee_id: int, ctx: Context | None = None
     ) -> dict[str, object]:
         """Map the legacy employee lookup to CRMT REST."""
-        try:
-            return await rest_client.get_employee(
-                headers=_forward_headers(_context_request(ctx)), employee_id=employee_id
-            )
-        except RestFailure as failure:
-            raise ToolError(failure.error.model_dump_json()) from None
-        except ValueError:
-            raise ToolError(
-                SafeError.for_code("INTERNAL_ERROR").model_dump_json()
-            ) from None
+        return await tool_call_policy.call(
+            ctx,
+            lambda headers: rest_client.get_employee(
+                headers=headers, employee_id=employee_id
+            ),
+        )
 
     @mcp.tool(
         name="list_punch_types",
@@ -140,40 +123,29 @@ def create_app(
             "Locations are reference data, not caller-selected input."
         ),
     )
-    @_instrument_tool("list_punch_types", ("active_only:bool",))
+    @tool_call_policy.instrument
     async def list_punch_types(
         active_only: bool = True, ctx: Context | None = None
     ) -> list[object]:
         """Map the legacy punch-type lookup to CRMT REST."""
-        try:
-            return await rest_client.list_punch_types(
-                headers=_forward_headers(_context_request(ctx)), active_only=active_only
-            )
-        except RestFailure as failure:
-            raise ToolError(failure.error.model_dump_json()) from None
-        except ValueError:
-            raise ToolError(
-                SafeError.for_code("INTERNAL_ERROR").model_dump_json()
-            ) from None
+        return await tool_call_policy.call(
+            ctx,
+            lambda headers: rest_client.list_punch_types(
+                headers=headers, active_only=active_only
+            ),
+        )
 
     @mcp.tool(
         name="list_locations",
         annotations={"readOnlyHint": True},
         description="List attendance-event location reference data.",
     )
-    @_instrument_tool("list_locations", ())
+    @tool_call_policy.instrument
     async def list_locations(ctx: Context | None = None) -> list[object]:
         """Map the legacy location lookup to CRMT REST."""
-        try:
-            return await rest_client.list_locations(
-                headers=_forward_headers(_context_request(ctx))
-            )
-        except RestFailure as failure:
-            raise ToolError(failure.error.model_dump_json()) from None
-        except ValueError:
-            raise ToolError(
-                SafeError.for_code("INTERNAL_ERROR").model_dump_json()
-            ) from None
+        return await tool_call_policy.call(
+            ctx, lambda headers: rest_client.list_locations(headers=headers)
+        )
 
     @mcp.tool(
         name="list_attendance_events",
@@ -183,16 +155,7 @@ def create_app(
             "This MVP tool is available only to the server-configured admin requester."
         ),
     )
-    @_instrument_tool(
-        "list_attendance_events",
-        (
-            "employee_id:int",
-            "start_date:date",
-            "end_date:date",
-            "limit:int",
-            "offset:int",
-        ),
-    )
+    @tool_call_policy.instrument
     async def list_attendance_events(
         employee_id: int,
         start_date: date,
@@ -202,45 +165,37 @@ def create_app(
         ctx: Context | None = None,
     ) -> dict[str, object]:
         """Map the legacy administrator event list directly to CRMT REST."""
-        try:
-            return await rest_client.list_attendance_events(
+        return await tool_call_policy.call(
+            ctx,
+            lambda headers: rest_client.list_attendance_events(
                 employee_id=employee_id,
-                headers=_forward_headers(_context_request(ctx)),
+                headers=headers,
                 params={
                     "start_date": start_date,
                     "end_date": end_date,
                     "limit": limit,
                     "offset": offset,
                 },
-            )
-        except RestFailure as failure:
-            raise ToolError(failure.error.model_dump_json()) from None
-        except ValueError:
-            raise ToolError(
-                SafeError.for_code("INTERNAL_ERROR").model_dump_json()
-            ) from None
+            ),
+        )
 
     @mcp.tool(
         name="get_attendance_event",
         annotations={"readOnlyHint": True},
         description="Return one attendance event, including recorded audit metadata.",
     )
-    @_instrument_tool("get_attendance_event", ("attendance_event_id:int",))
+    @tool_call_policy.instrument
     async def get_attendance_event(
         attendance_event_id: int, ctx: Context | None = None
     ) -> dict[str, object]:
         """Map the legacy administrator event detail directly to CRMT REST."""
-        try:
-            return await rest_client.get_attendance_event(
+        return await tool_call_policy.call(
+            ctx,
+            lambda headers: rest_client.get_attendance_event(
                 attendance_event_id=attendance_event_id,
-                headers=_forward_headers(_context_request(ctx)),
-            )
-        except RestFailure as failure:
-            raise ToolError(failure.error.model_dump_json()) from None
-        except ValueError:
-            raise ToolError(
-                SafeError.for_code("INTERNAL_ERROR").model_dump_json()
-            ) from None
+                headers=headers,
+            ),
+        )
 
     @mcp.tool(
         name="get_daily_attendance",
@@ -250,23 +205,19 @@ def create_app(
             "calculated planned-versus-logged outcome."
         ),
     )
-    @_instrument_tool("get_daily_attendance", ("employee_id:int", "day:date"))
+    @tool_call_policy.instrument
     async def get_daily_attendance(
         employee_id: int, day: date, ctx: Context | None = None
     ) -> dict[str, object]:
         """Map the legacy daily administrator view directly to CRMT REST."""
-        try:
-            return await rest_client.get_daily_attendance(
+        return await tool_call_policy.call(
+            ctx,
+            lambda headers: rest_client.get_daily_attendance(
                 employee_id=employee_id,
-                headers=_forward_headers(_context_request(ctx)),
+                headers=headers,
                 params={"day": day},
-            )
-        except RestFailure as failure:
-            raise ToolError(failure.error.model_dump_json()) from None
-        except ValueError:
-            raise ToolError(
-                SafeError.for_code("INTERNAL_ERROR").model_dump_json()
-            ) from None
+            ),
+        )
 
     @mcp.tool(
         name="get_planned_work",
@@ -276,9 +227,7 @@ def create_app(
             "inclusive Europe/Ljubljana range of up to 31 calendar days."
         ),
     )
-    @_instrument_tool(
-        "get_planned_work", ("employee_id:int", "start_date:date", "end_date:date")
-    )
+    @tool_call_policy.instrument
     async def get_planned_work(
         employee_id: int,
         start_date: date,
@@ -286,18 +235,14 @@ def create_app(
         ctx: Context | None = None,
     ) -> dict[str, object]:
         """Map the legacy planned-work administrator view directly to CRMT REST."""
-        try:
-            return await rest_client.get_planned_work(
+        return await tool_call_policy.call(
+            ctx,
+            lambda headers: rest_client.get_planned_work(
                 employee_id=employee_id,
-                headers=_forward_headers(_context_request(ctx)),
+                headers=headers,
                 params={"start_date": start_date, "end_date": end_date},
-            )
-        except RestFailure as failure:
-            raise ToolError(failure.error.model_dump_json()) from None
-        except ValueError:
-            raise ToolError(
-                SafeError.for_code("INTERNAL_ERROR").model_dump_json()
-            ) from None
+            ),
+        )
 
     @mcp.tool(
         name="get_current_attendance",
@@ -307,10 +252,7 @@ def create_app(
         ),
         annotations={"readOnlyHint": True},
     )
-    @_instrument_tool(
-        "get_current_attendance",
-        ("as_of:datetime?", "status:string?", "limit:int", "offset:int"),
-    )
+    @tool_call_policy.instrument
     async def get_current_attendance(
         as_of: datetime | None = None,
         status: Literal[
@@ -327,7 +269,7 @@ def create_app(
         offset: int = 0,
         ctx: Context | None = None,
     ) -> dict[str, object]:
-        return await _reporting_call(
+        return await tool_call_policy.call(
             ctx,
             lambda headers: rest_client.get_current_attendance(
                 headers=headers,
@@ -347,14 +289,11 @@ def create_app(
         ),
         annotations={"readOnlyHint": True},
     )
-    @_instrument_tool(
-        "get_employee_attendance_analysis",
-        ("employee_id:int", "start_date:date", "end_date:date"),
-    )
+    @tool_call_policy.instrument
     async def get_employee_attendance_analysis(
         employee_id: int, start_date: date, end_date: date, ctx: Context | None = None
     ) -> dict[str, object]:
-        return await _reporting_call(
+        return await tool_call_policy.call(
             ctx,
             lambda headers: rest_client.get_employee_attendance_analysis(
                 employee_id=employee_id,
@@ -370,14 +309,11 @@ def create_app(
         ),
         annotations={"readOnlyHint": True},
     )
-    @_instrument_tool(
-        "get_employee_attendance_summary",
-        ("employee_id:int", "start_date:date", "end_date:date"),
-    )
+    @tool_call_policy.instrument
     async def get_employee_attendance_summary(
         employee_id: int, start_date: date, end_date: date, ctx: Context | None = None
     ) -> dict[str, object]:
-        return await _reporting_call(
+        return await tool_call_policy.call(
             ctx,
             lambda headers: rest_client.get_employee_attendance_summary(
                 employee_id=employee_id,
@@ -394,16 +330,7 @@ def create_app(
         ),
         annotations={"readOnlyHint": True},
     )
-    @_instrument_tool(
-        "get_exceptions",
-        (
-            "start_date:date",
-            "end_date:date",
-            "employee_ids:list?",
-            "limit:int",
-            "offset:int",
-        ),
-    )
+    @tool_call_policy.instrument
     async def get_exceptions(
         start_date: date,
         end_date: date,
@@ -412,7 +339,7 @@ def create_app(
         offset: int = 0,
         ctx: Context | None = None,
     ) -> dict[str, object]:
-        return await _reporting_call(
+        return await tool_call_policy.call(
             ctx,
             lambda headers: rest_client.get_exceptions(
                 headers=headers,
@@ -434,10 +361,7 @@ def create_app(
         ),
         annotations={"readOnlyHint": True},
     )
-    @_instrument_tool(
-        "get_organization_attendance_analysis",
-        ("start_date:date", "end_date:date", "limit:int", "offset:int"),
-    )
+    @tool_call_policy.instrument
     async def get_organization_attendance_analysis(
         start_date: date,
         end_date: date,
@@ -445,7 +369,7 @@ def create_app(
         offset: int = 0,
         ctx: Context | None = None,
     ) -> dict[str, object]:
-        return await _reporting_call(
+        return await tool_call_policy.call(
             ctx,
             lambda headers: rest_client.get_organization_attendance_analysis(
                 headers=headers,
@@ -491,92 +415,8 @@ async def _health(_: Request) -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
 
-def _instrument_tool(handler: str, input_shape: tuple[str, ...]):
-    """Record a tool lifecycle without retaining caller values or tool results."""
-
-    def decorate(operation: Any) -> Any:
-        @wraps(operation)
-        async def instrumented(*args: Any, **kwargs: Any) -> Any:
-            started_at = perf_counter()
-            logger.info(
-                "mcp_tool_operation_started",
-                handler=handler,
-                step="invocation",
-                input_shape=input_shape,
-            )
-            try:
-                result = await operation(*args, **kwargs)
-            except Exception as error:
-                logger.warning(
-                    "mcp_tool_operation_failed",
-                    handler=handler,
-                    step="crmt_rest_call",
-                    input_shape=input_shape,
-                    duration_ms=_duration_ms(started_at),
-                    error_type=type(error).__name__,
-                )
-                raise
-            logger.info(
-                "mcp_tool_operation_step_completed",
-                handler=handler,
-                step="crmt_rest_call",
-                input_shape=input_shape,
-                duration_ms=_duration_ms(started_at),
-            )
-            logger.info(
-                "mcp_tool_operation_succeeded",
-                handler=handler,
-                step="completed",
-                input_shape=input_shape,
-                duration_ms=_duration_ms(started_at),
-            )
-            return result
-
-        return instrumented
-
-    return decorate
-
-
-def _context_request(ctx: Context | None) -> Request:
-    request = ctx.request_context.request if ctx is not None else None
-    if request is None:
-        raise ValueError("MCP request context is unavailable")
-    return request
-
-
-async def _reporting_call(ctx: Context | None, operation: Any) -> dict[str, object]:
-    try:
-        return await operation(_forward_headers(_context_request(ctx)))
-    except RestFailure as failure:
-        raise ToolError(failure.error.model_dump_json()) from None
-    except ValueError:
-        raise ToolError(
-            SafeError.for_code("INTERNAL_ERROR").model_dump_json()
-        ) from None
-
-
 def _defined_params(**params: object) -> dict[str, object]:
     return {name: value for name, value in params.items() if value is not None}
-
-
-def _forward_headers(request: Request) -> dict[str, str]:
-    authorization = request.headers.getlist(AUTHORIZATION_HEADER)
-    correlation_id = request.headers.getlist(CORRELATION_ID_HEADER)
-    if len(authorization) != 1:
-        raise HeaderFailure("AUTHENTICATION_REQUIRED")
-    scheme, separator, token = authorization[0].partition(" ")
-    if scheme.casefold() != "bearer" or not separator or not token.strip():
-        raise HeaderFailure("TOKEN_INVALID")
-    if len(correlation_id) != 1:
-        raise HeaderFailure("CORRELATION_ID_INVALID")
-    try:
-        UUID(correlation_id[0])
-    except ValueError:
-        raise HeaderFailure("CORRELATION_ID_INVALID") from None
-    return {
-        AUTHORIZATION_HEADER: authorization[0],
-        CORRELATION_ID_HEADER: correlation_id[0],
-    }
 
 
 class _AdmissionMiddleware:
@@ -592,7 +432,7 @@ class _AdmissionMiddleware:
             return
         request = Request(scope, receive=receive)
         try:
-            headers = _forward_headers(request)
+            headers = forward_headers(request)
         except HeaderFailure as failure:
             _set_lifecycle_result(
                 scope,
@@ -785,10 +625,3 @@ async def _send_safe_error(
 
 async def _empty_receive() -> Message:
     return {"type": "http.disconnect"}
-
-
-class HeaderFailure(ValueError):
-    """A local, safe rejection before a caller header can be forwarded."""
-
-    def __init__(self, code: str) -> None:
-        self.code = code
