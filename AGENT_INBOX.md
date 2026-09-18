@@ -2,25 +2,26 @@
 
 > **Status:** Completed
 >
-> **Objective:** Deepen the internal MCP tool-call policy so all fourteen typed
-> read-only tool handlers share header acquisition, REST-to-MCP safe-error
-> translation, and value-free lifecycle logging.
+> **Objective:** Make each named CRMT REST-client operation's route and safe
+> observability identity inseparable in one private representation.
 >
 > **Contract context:** Preserve MCP contract `1.2.0`, Streamable HTTP behavior,
 > tool names, schemas, defaults, descriptions, routes, allow-listed header
-> forwarding, and all safe logging/redaction guarantees. `CrmtRestClient`
-> remains the sole REST-client seam; CRMT remains the authority for token
-> validation, identity, authorization, audit, and attendance behavior. Do not
-> use secrets, SQL Server, raw attendance data, or external deployments.
+> forwarding, and all safe logging/redaction guarantees. Preserve the named
+> `CrmtRestClient` interface and its sole REST-client seam; CRMT remains the
+> authority for token validation, identity, authorization, audit, and attendance
+> behavior. Do not use secrets, SQL Server, raw attendance data, or external
+> deployments.
 >
-> **Verification:** Added MCP-level reporting route and header-forwarding
-> coverage. Verified with `uv run pytest` (39 passed), `uv run ruff check .`,
-> and `uv run ruff format --check .`.
+> **Verification:** Added REST-client seam coverage for session admission and
+> all fourteen tool operations. Verified with `uv run pytest tests/test_rest_client.py`
+> (20 passed), `uv run pytest` (39 passed), `uv run ruff check .`, and
+> `uv run ruff format --check .`.
 >
-> **Definition of done:** Completed locally: a private policy module derives
-> safe handler metadata from the actual typed handler interface and centrally
-> invokes CRMT operations, while every public tool preserves its frozen MCP
-> contract and verified behavior.
+> **Definition of done:** Completed locally: a private immutable operation
+> record owns each named operation's method, route template, and log identity;
+> reverse route parsing is removed, and all frozen adapter behavior is locally
+> verified.
 
 The repository has been initialized with its agent operating documentation only.
 Before beginning an implementation slice, record an approved, bounded directive

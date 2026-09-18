@@ -1,88 +1,176 @@
 import httpx
 import pytest
 
-from attendance_mcp.rest_client import CrmtRestClient, RestFailure, _operation_metadata
+from attendance_mcp.rest_client import CrmtRestClient, RestFailure
+
+HEADERS = {
+    "Authorization": "Bearer delegated-token",
+    "X-Correlation-ID": "11111111-1111-1111-1111-111111111111",
+}
 
 
 @pytest.mark.parametrize(
-    ("path", "operation", "route_template"),
+    ("operation", "method", "path", "route_template", "invoke"),
     [
-        (
-            "/api/v1/me/attendance-events",
+        pytest.param(
+            "admit_session",
+            "POST",
+            "/internal/v1/mcp/session-admissions",
+            "/internal/v1/mcp/session-admissions",
+            lambda client: client.admit_session(HEADERS),
+            id="session-admission",
+        ),
+        pytest.param(
             "list_my_attendance_events",
+            "GET",
             "/api/v1/me/attendance-events",
+            "/api/v1/me/attendance-events",
+            lambda client: client.list_my_attendance_events(headers=HEADERS, params={}),
+            id="requester-events",
         ),
-        ("/api/v1/employees", "list_employees", "/api/v1/employees"),
-        ("/api/v1/employees/42", "get_employee", "/api/v1/employees/{employee_id}"),
-        ("/api/v1/punch-types", "list_punch_types", "/api/v1/punch-types"),
-        ("/api/v1/locations", "list_locations", "/api/v1/locations"),
-        (
-            "/api/v1/employees/42/attendance-events",
+        pytest.param(
+            "list_employees",
+            "GET",
+            "/api/v1/employees",
+            "/api/v1/employees",
+            lambda client: client.list_employees(headers=HEADERS, params={}),
+            id="employees",
+        ),
+        pytest.param(
+            "get_employee",
+            "GET",
+            "/api/v1/employees/42",
+            "/api/v1/employees/{employee_id}",
+            lambda client: client.get_employee(headers=HEADERS, employee_id=42),
+            id="employee",
+        ),
+        pytest.param(
+            "list_punch_types",
+            "GET",
+            "/api/v1/punch-types",
+            "/api/v1/punch-types",
+            lambda client: client.list_punch_types(headers=HEADERS, active_only=True),
+            id="punch-types",
+        ),
+        pytest.param(
+            "list_locations",
+            "GET",
+            "/api/v1/locations",
+            "/api/v1/locations",
+            lambda client: client.list_locations(headers=HEADERS),
+            id="locations",
+        ),
+        pytest.param(
             "list_attendance_events",
+            "GET",
+            "/api/v1/employees/42/attendance-events",
             "/api/v1/employees/{employee_id}/attendance-events",
+            lambda client: client.list_attendance_events(
+                headers=HEADERS, employee_id=42, params={}
+            ),
+            id="employee-events",
         ),
-        (
-            "/api/v1/attendance-events/100",
+        pytest.param(
             "get_attendance_event",
+            "GET",
+            "/api/v1/attendance-events/100",
             "/api/v1/attendance-events/{attendance_event_id}",
+            lambda client: client.get_attendance_event(
+                headers=HEADERS, attendance_event_id=100
+            ),
+            id="attendance-event",
         ),
-        (
-            "/api/v1/employees/42/daily-attendance",
+        pytest.param(
             "get_daily_attendance",
+            "GET",
+            "/api/v1/employees/42/daily-attendance",
             "/api/v1/employees/{employee_id}/daily-attendance",
+            lambda client: client.get_daily_attendance(
+                headers=HEADERS, employee_id=42, params={}
+            ),
+            id="daily-attendance",
         ),
-        (
-            "/api/v1/employees/42/planned-work",
+        pytest.param(
             "get_planned_work",
+            "GET",
+            "/api/v1/employees/42/planned-work",
             "/api/v1/employees/{employee_id}/planned-work",
+            lambda client: client.get_planned_work(
+                headers=HEADERS, employee_id=42, params={}
+            ),
+            id="planned-work",
         ),
-        (
-            "/api/v1/attendance/current",
+        pytest.param(
             "get_current_attendance",
+            "GET",
             "/api/v1/attendance/current",
+            "/api/v1/attendance/current",
+            lambda client: client.get_current_attendance(headers=HEADERS, params={}),
+            id="current-attendance",
         ),
-        (
-            "/api/v1/employees/42/attendance-analysis",
+        pytest.param(
             "get_employee_attendance_analysis",
+            "GET",
+            "/api/v1/employees/42/attendance-analysis",
             "/api/v1/employees/{employee_id}/attendance-analysis",
+            lambda client: client.get_employee_attendance_analysis(
+                headers=HEADERS, employee_id=42, params={}
+            ),
+            id="attendance-analysis",
         ),
-        (
-            "/api/v1/employees/42/attendance-summary",
+        pytest.param(
             "get_employee_attendance_summary",
+            "GET",
+            "/api/v1/employees/42/attendance-summary",
             "/api/v1/employees/{employee_id}/attendance-summary",
+            lambda client: client.get_employee_attendance_summary(
+                headers=HEADERS, employee_id=42, params={}
+            ),
+            id="attendance-summary",
         ),
-        (
-            "/api/v1/attendance/exceptions",
+        pytest.param(
             "get_exceptions",
+            "GET",
             "/api/v1/attendance/exceptions",
+            "/api/v1/attendance/exceptions",
+            lambda client: client.get_exceptions(headers=HEADERS, params={}),
+            id="exceptions",
         ),
-        (
-            "/api/v1/attendance/organization-analysis",
+        pytest.param(
             "get_organization_attendance_analysis",
+            "GET",
             "/api/v1/attendance/organization-analysis",
+            "/api/v1/attendance/organization-analysis",
+            lambda client: client.get_organization_attendance_analysis(
+                headers=HEADERS, params={}
+            ),
+            id="organization-analysis",
         ),
     ],
 )
-def test_rest_operation_metadata_covers_the_complete_tool_catalog(
-    path: str, operation: str, route_template: str
-) -> None:
-    assert _operation_metadata("GET", path) == (operation, route_template)
-
-
 @pytest.mark.asyncio
-async def test_rest_client_logs_stable_operation_and_route_template_only(
+async def test_named_operations_route_and_log_stable_facts(
     monkeypatch,
+    operation: str,
+    method: str,
+    path: str,
+    route_template: str,
+    invoke,
 ) -> None:
     events: list[tuple[str, dict[str, object]]] = []
+    received: list[httpx.Request] = []
 
     class CapturingLogger:
         def info(self, event: str, **values: object) -> None:
             events.append((event, values))
 
-    async def handler(_: httpx.Request) -> httpx.Response:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        received.append(request)
         return httpx.Response(
             200,
-            json={"items": []},
+            json=[]
+            if request.url.path in {"/api/v1/punch-types", "/api/v1/locations"}
+            else {},
             headers={"X-Attendance-API-Contract-Version": "1.0.0"},
         )
 
@@ -90,28 +178,22 @@ async def test_rest_client_logs_stable_operation_and_route_template_only(
     async with httpx.AsyncClient(
         base_url="https://crmt.example", transport=httpx.MockTransport(handler)
     ) as http_client:
-        await CrmtRestClient(client=http_client).get_employee_attendance_analysis(
-            employee_id=42,
-            headers={
-                "Authorization": "Bearer delegated-token",
-                "X-Correlation-ID": "11111111-1111-1111-1111-111111111111",
-            },
-            params={"start_date": "2026-08-01", "end_date": "2026-08-02"},
-        )
+        await invoke(CrmtRestClient(client=http_client))
 
+    assert (received[0].method, received[0].url.path) == (method, path)
     assert [event for event, _ in events] == [
         "crmt_operation_started",
         "crmt_operation_succeeded",
     ]
     assert events[0][1] == {
-        "operation": "get_employee_attendance_analysis",
-        "method": "GET",
-        "route_template": "/api/v1/employees/{employee_id}/attendance-analysis",
+        "operation": operation,
+        "method": method,
+        "route_template": route_template,
     }
     assert events[1][1] | {"duration_ms": events[1][1]["duration_ms"]} == {
-        "operation": "get_employee_attendance_analysis",
-        "method": "GET",
-        "route_template": "/api/v1/employees/{employee_id}/attendance-analysis",
+        "operation": operation,
+        "method": method,
+        "route_template": route_template,
         "outcome": "succeeded",
         "status_code": 200,
         "duration_ms": events[1][1]["duration_ms"],

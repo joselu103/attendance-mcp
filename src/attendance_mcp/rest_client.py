@@ -1,6 +1,7 @@
 """The adapter's single deep, safe REST-client seam."""
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from time import perf_counter
 
 import httpx
@@ -12,6 +13,61 @@ REST_CONTRACT_HEADER = "X-Attendance-API-Contract-Version"
 AUTHORIZATION_HEADER = "Authorization"
 CORRELATION_ID_HEADER = "X-Correlation-ID"
 logger = structlog.get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class _Operation:
+    """One CRMT operation's routing and safe observability facts."""
+
+    name: str
+    method: str
+    route_template: str
+
+    def path(self, route_values: Mapping[str, int] | None = None) -> str:
+        return self.route_template.format(**(route_values or {}))
+
+
+_ADMIT_SESSION = _Operation(
+    "admit_session", "POST", "/internal/v1/mcp/session-admissions"
+)
+_LIST_MY_ATTENDANCE_EVENTS = _Operation(
+    "list_my_attendance_events", "GET", "/api/v1/me/attendance-events"
+)
+_LIST_EMPLOYEES = _Operation("list_employees", "GET", "/api/v1/employees")
+_GET_EMPLOYEE = _Operation("get_employee", "GET", "/api/v1/employees/{employee_id}")
+_LIST_PUNCH_TYPES = _Operation("list_punch_types", "GET", "/api/v1/punch-types")
+_LIST_LOCATIONS = _Operation("list_locations", "GET", "/api/v1/locations")
+_LIST_ATTENDANCE_EVENTS = _Operation(
+    "list_attendance_events", "GET", "/api/v1/employees/{employee_id}/attendance-events"
+)
+_GET_ATTENDANCE_EVENT = _Operation(
+    "get_attendance_event", "GET", "/api/v1/attendance-events/{attendance_event_id}"
+)
+_GET_DAILY_ATTENDANCE = _Operation(
+    "get_daily_attendance", "GET", "/api/v1/employees/{employee_id}/daily-attendance"
+)
+_GET_PLANNED_WORK = _Operation(
+    "get_planned_work", "GET", "/api/v1/employees/{employee_id}/planned-work"
+)
+_GET_CURRENT_ATTENDANCE = _Operation(
+    "get_current_attendance", "GET", "/api/v1/attendance/current"
+)
+_GET_EMPLOYEE_ATTENDANCE_ANALYSIS = _Operation(
+    "get_employee_attendance_analysis",
+    "GET",
+    "/api/v1/employees/{employee_id}/attendance-analysis",
+)
+_GET_EMPLOYEE_ATTENDANCE_SUMMARY = _Operation(
+    "get_employee_attendance_summary",
+    "GET",
+    "/api/v1/employees/{employee_id}/attendance-summary",
+)
+_GET_EXCEPTIONS = _Operation("get_exceptions", "GET", "/api/v1/attendance/exceptions")
+_GET_ORGANIZATION_ATTENDANCE_ANALYSIS = _Operation(
+    "get_organization_attendance_analysis",
+    "GET",
+    "/api/v1/attendance/organization-analysis",
+)
 
 
 class RestFailure(Exception):
@@ -29,61 +85,63 @@ class CrmtRestClient:
         self._client = client
 
     async def admit_session(self, headers: Mapping[str, str]) -> None:
-        await self._request(
-            "POST", "/internal/v1/mcp/session-admissions", headers=headers
-        )
+        await self._request(_ADMIT_SESSION, headers=headers)
 
     async def list_my_attendance_events(
         self, *, headers: Mapping[str, str], params: Mapping[str, object]
     ) -> dict[str, object]:
         return await self._get_object(
-            "/api/v1/me/attendance-events", headers=headers, params=params
+            _LIST_MY_ATTENDANCE_EVENTS, headers=headers, params=params
         )
 
     async def list_employees(
         self, *, headers: Mapping[str, str], params: Mapping[str, object]
     ) -> dict[str, object]:
-        return await self._get_object(
-            "/api/v1/employees", headers=headers, params=params
-        )
+        return await self._get_object(_LIST_EMPLOYEES, headers=headers, params=params)
 
     async def get_employee(
         self, *, headers: Mapping[str, str], employee_id: int
     ) -> dict[str, object]:
         return await self._get_object(
-            f"/api/v1/employees/{employee_id}", headers=headers
+            _GET_EMPLOYEE, headers=headers, route_values={"employee_id": employee_id}
         )
 
     async def list_punch_types(
         self, *, headers: Mapping[str, str], active_only: bool
     ) -> list[object]:
         return await self._get_list(
-            "/api/v1/punch-types", headers=headers, params={"active_only": active_only}
+            _LIST_PUNCH_TYPES, headers=headers, params={"active_only": active_only}
         )
 
     async def list_locations(self, *, headers: Mapping[str, str]) -> list[object]:
-        return await self._get_list("/api/v1/locations", headers=headers)
+        return await self._get_list(_LIST_LOCATIONS, headers=headers)
 
     async def _get_object(
         self,
-        path: str,
+        operation: _Operation,
         *,
         headers: Mapping[str, str],
         params: Mapping[str, object] | None = None,
+        route_values: Mapping[str, int] | None = None,
     ) -> dict[str, object]:
-        value = await self._get_json(path, headers=headers, params=params)
+        value = await self._get_json(
+            operation, headers=headers, params=params, route_values=route_values
+        )
         if not isinstance(value, dict):
             raise RestFailure(SafeError.for_code("BACKEND_UNAVAILABLE"))
         return value
 
     async def _get_list(
         self,
-        path: str,
+        operation: _Operation,
         *,
         headers: Mapping[str, str],
         params: Mapping[str, object] | None = None,
+        route_values: Mapping[str, int] | None = None,
     ) -> list[object]:
-        value = await self._get_json(path, headers=headers, params=params)
+        value = await self._get_json(
+            operation, headers=headers, params=params, route_values=route_values
+        )
         if not isinstance(value, list):
             raise RestFailure(SafeError.for_code("BACKEND_UNAVAILABLE"))
         return value
@@ -96,16 +154,19 @@ class CrmtRestClient:
         params: Mapping[str, object],
     ) -> dict[str, object]:
         return await self._get_object(
-            f"/api/v1/employees/{employee_id}/attendance-events",
+            _LIST_ATTENDANCE_EVENTS,
             headers=headers,
             params=params,
+            route_values={"employee_id": employee_id},
         )
 
     async def get_attendance_event(
         self, *, attendance_event_id: int, headers: Mapping[str, str]
     ) -> dict[str, object]:
         return await self._get_object(
-            f"/api/v1/attendance-events/{attendance_event_id}", headers=headers
+            _GET_ATTENDANCE_EVENT,
+            headers=headers,
+            route_values={"attendance_event_id": attendance_event_id},
         )
 
     async def get_daily_attendance(
@@ -116,9 +177,10 @@ class CrmtRestClient:
         params: Mapping[str, object],
     ) -> dict[str, object]:
         return await self._get_object(
-            f"/api/v1/employees/{employee_id}/daily-attendance",
+            _GET_DAILY_ATTENDANCE,
             headers=headers,
             params=params,
+            route_values={"employee_id": employee_id},
         )
 
     async def get_planned_work(
@@ -129,19 +191,23 @@ class CrmtRestClient:
         params: Mapping[str, object],
     ) -> dict[str, object]:
         return await self._get_object(
-            f"/api/v1/employees/{employee_id}/planned-work",
+            _GET_PLANNED_WORK,
             headers=headers,
             params=params,
+            route_values={"employee_id": employee_id},
         )
 
     async def _get_json(
         self,
-        path: str,
+        operation: _Operation,
         *,
         headers: Mapping[str, str],
         params: Mapping[str, object] | None = None,
+        route_values: Mapping[str, int] | None = None,
     ) -> object:
-        response = await self._request("GET", path, headers=headers, params=params)
+        response = await self._request(
+            operation, headers=headers, params=params, route_values=route_values
+        )
         try:
             value = response.json()
         except ValueError:
@@ -152,7 +218,7 @@ class CrmtRestClient:
         self, *, headers: Mapping[str, str], params: Mapping[str, object]
     ) -> dict[str, object]:
         return await self._get_object(
-            "/api/v1/attendance/current", headers=headers, params=params
+            _GET_CURRENT_ATTENDANCE, headers=headers, params=params
         )
 
     async def get_employee_attendance_analysis(
@@ -163,9 +229,10 @@ class CrmtRestClient:
         params: Mapping[str, object],
     ) -> dict[str, object]:
         return await self._get_object(
-            f"/api/v1/employees/{employee_id}/attendance-analysis",
+            _GET_EMPLOYEE_ATTENDANCE_ANALYSIS,
             headers=headers,
             params=params,
+            route_values={"employee_id": employee_id},
         )
 
     async def get_employee_attendance_summary(
@@ -176,23 +243,22 @@ class CrmtRestClient:
         params: Mapping[str, object],
     ) -> dict[str, object]:
         return await self._get_object(
-            f"/api/v1/employees/{employee_id}/attendance-summary",
+            _GET_EMPLOYEE_ATTENDANCE_SUMMARY,
             headers=headers,
             params=params,
+            route_values={"employee_id": employee_id},
         )
 
     async def get_exceptions(
         self, *, headers: Mapping[str, str], params: Mapping[str, object]
     ) -> dict[str, object]:
-        return await self._get_object(
-            "/api/v1/attendance/exceptions", headers=headers, params=params
-        )
+        return await self._get_object(_GET_EXCEPTIONS, headers=headers, params=params)
 
     async def get_organization_attendance_analysis(
         self, *, headers: Mapping[str, str], params: Mapping[str, object]
     ) -> dict[str, object]:
         return await self._get_object(
-            "/api/v1/attendance/organization-analysis", headers=headers, params=params
+            _GET_ORGANIZATION_ATTENDANCE_ANALYSIS, headers=headers, params=params
         )
 
     async def aclose(self) -> None:
@@ -201,24 +267,23 @@ class CrmtRestClient:
 
     async def _request(
         self,
-        method: str,
-        path: str,
+        operation: _Operation,
         *,
         headers: Mapping[str, str],
         params: Mapping[str, object] | None = None,
+        route_values: Mapping[str, int] | None = None,
     ) -> httpx.Response:
-        operation, route_template = _operation_metadata(method, path)
         started_at = perf_counter()
         logger.info(
             "crmt_operation_started",
-            operation=operation,
-            method=method,
-            route_template=route_template,
+            operation=operation.name,
+            method=operation.method,
+            route_template=operation.route_template,
         )
         try:
             response = await self._client.request(
-                method,
-                path,
+                operation.method,
+                operation.path(route_values),
                 headers={
                     AUTHORIZATION_HEADER: headers[AUTHORIZATION_HEADER],
                     CORRELATION_ID_HEADER: headers[CORRELATION_ID_HEADER],
@@ -226,22 +291,18 @@ class CrmtRestClient:
                 params=params,
             )
         except httpx.HTTPError:
-            _log_crmt_failure(
-                operation, method, route_template, started_at, "BACKEND_UNAVAILABLE"
-            )
+            _log_crmt_failure(operation, started_at, "BACKEND_UNAVAILABLE")
             raise RestFailure(SafeError.for_code("BACKEND_UNAVAILABLE")) from None
 
         if self._contract_major_is_incompatible(response):
-            _log_crmt_failure(
-                operation, method, route_template, started_at, "BACKEND_UNAVAILABLE"
-            )
+            _log_crmt_failure(operation, started_at, "BACKEND_UNAVAILABLE")
             raise RestFailure(SafeError.for_code("BACKEND_UNAVAILABLE"))
         if response.is_success:
             logger.info(
                 "crmt_operation_succeeded",
-                operation=operation,
-                method=method,
-                route_template=route_template,
+                operation=operation.name,
+                method=operation.method,
+                route_template=operation.route_template,
                 outcome="succeeded",
                 status_code=response.status_code,
                 duration_ms=_duration_ms(started_at),
@@ -251,8 +312,6 @@ class CrmtRestClient:
         error = self._safe_error(response)
         _log_crmt_failure(
             operation,
-            method,
-            route_template,
             started_at,
             (error or SafeError.for_code("BACKEND_UNAVAILABLE")).code,
             status_code=response.status_code if error else 503,
@@ -277,42 +336,8 @@ class CrmtRestClient:
             return None
 
 
-def _operation_metadata(method: str, path: str) -> tuple[str, str]:
-    """Return stable labels without ever retaining a concrete upstream URL."""
-    exact_routes = {
-        ("POST", "/internal/v1/mcp/session-admissions"): "admit_session",
-        ("GET", "/api/v1/me/attendance-events"): "list_my_attendance_events",
-        ("GET", "/api/v1/employees"): "list_employees",
-        ("GET", "/api/v1/punch-types"): "list_punch_types",
-        ("GET", "/api/v1/locations"): "list_locations",
-        ("GET", "/api/v1/attendance/current"): "get_current_attendance",
-        ("GET", "/api/v1/attendance/exceptions"): "get_exceptions",
-        ("GET", "/api/v1/attendance/organization-analysis"): (
-            "get_organization_attendance_analysis"
-        ),
-    }
-    if (operation := exact_routes.get((method, path))) is not None:
-        return operation, path
-    for suffix, operation in {
-        "attendance-events": "list_attendance_events",
-        "daily-attendance": "get_daily_attendance",
-        "planned-work": "get_planned_work",
-        "attendance-analysis": "get_employee_attendance_analysis",
-        "attendance-summary": "get_employee_attendance_summary",
-    }.items():
-        if path.startswith("/api/v1/employees/") and path.endswith(f"/{suffix}"):
-            return operation, f"/api/v1/employees/{{employee_id}}/{suffix}"
-    if path.startswith("/api/v1/employees/"):
-        return "get_employee", "/api/v1/employees/{employee_id}"
-    if path.startswith("/api/v1/attendance-events/"):
-        return "get_attendance_event", "/api/v1/attendance-events/{attendance_event_id}"
-    return "unknown", "unknown"
-
-
 def _log_crmt_failure(
-    operation: str,
-    method: str,
-    route_template: str,
+    operation: _Operation,
     started_at: float,
     safe_error_code: str,
     *,
@@ -320,9 +345,9 @@ def _log_crmt_failure(
 ) -> None:
     logger.warning(
         "crmt_operation_failed",
-        operation=operation,
-        method=method,
-        route_template=route_template,
+        operation=operation.name,
+        method=operation.method,
+        route_template=operation.route_template,
         outcome="failed",
         safe_error_code=safe_error_code,
         status_code=status_code,
