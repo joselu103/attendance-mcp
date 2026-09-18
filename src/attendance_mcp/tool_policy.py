@@ -1,7 +1,7 @@
 """Shared, safe invocation policy for explicit FastMCP tool registrations."""
 
 import inspect
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import date, datetime
 from functools import wraps
 from time import perf_counter
@@ -109,14 +109,22 @@ def forward_headers(request: Request) -> dict[str, str]:
         raise HeaderFailure("TOKEN_INVALID")
     if len(correlation_id) != 1:
         raise HeaderFailure("CORRELATION_ID_INVALID")
-    try:
-        UUID(correlation_id[0])
-    except ValueError:
+    if canonical_correlation_id(correlation_id) is None:
         raise HeaderFailure("CORRELATION_ID_INVALID") from None
     return {
         AUTHORIZATION_HEADER: authorization[0],
         CORRELATION_ID_HEADER: correlation_id[0],
     }
+
+
+def canonical_correlation_id(values: Sequence[str]) -> str | None:
+    """Return a logging-safe canonical UUID only for one valid header value."""
+    if len(values) != 1:
+        return None
+    try:
+        return str(UUID(values[0]))
+    except ValueError:
+        return None
 
 
 def _context_request(ctx: Context | None) -> Request:

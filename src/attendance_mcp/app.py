@@ -1,33 +1,20 @@
 """ASGI composition for Attendance MCP's public, stateless HTTP surface."""
 
-import json
 from contextlib import asynccontextmanager
 from datetime import date, datetime
-from time import perf_counter
-from typing import Any, Literal
-from uuid import UUID, uuid4
+from typing import Literal
 
 import httpx
-import structlog
 from fastmcp import Context, FastMCP
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from attendance_mcp.contracts import SafeError
-from attendance_mcp.rest_client import (
-    CORRELATION_ID_HEADER,
-    CrmtRestClient,
-    RestFailure,
-)
+from attendance_mcp.http_lifecycle import MCP_CONTRACT_VERSION, _McpHttpLifecycle
+from attendance_mcp.rest_client import CrmtRestClient
 from attendance_mcp.settings import Settings
-from attendance_mcp.tool_policy import HeaderFailure, ToolCallPolicy, forward_headers
-
-MCP_CONTRACT_VERSION = "1.2.0"
-MCP_CONTRACT_VERSION_HEADER = "X-Attendance-MCP-Contract-Version"
-logger = structlog.get_logger(__name__)
+from attendance_mcp.tool_policy import ToolCallPolicy
 
 
 def create_app(
@@ -405,9 +392,7 @@ def create_app(
         ],
         lifespan=lifespan,
     )
-    app.add_middleware(_AdmissionMiddleware, rest_client=rest_client)
-    app.add_middleware(_McpContractVersionMiddleware)
-    app.add_middleware(_RequestLoggingMiddleware)
+    app.add_middleware(_McpHttpLifecycle, rest_client=rest_client)
     return app
 
 
@@ -417,211 +402,3 @@ async def _health(_: Request) -> JSONResponse:
 
 def _defined_params(**params: object) -> dict[str, object]:
     return {name: value for name, value in params.items() if value is not None}
-
-
-class _AdmissionMiddleware:
-    """Validate inbound headers and admit only MCP initialize requests through CRMT."""
-
-    def __init__(self, app: ASGIApp, rest_client: CrmtRestClient) -> None:
-        self._app = app
-        self._rest_client = rest_client
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope["path"] != "/mcp":
-            await self._app(scope, receive, send)
-            return
-        request = Request(scope, receive=receive)
-        try:
-            headers = forward_headers(request)
-        except HeaderFailure as failure:
-            _set_lifecycle_result(
-                scope,
-                result_state="header_rejected",
-                header_admission="rejected",
-                safe_error_code=failure.code,
-            )
-            status_code = (
-                401
-                if failure.code in {"AUTHENTICATION_REQUIRED", "TOKEN_INVALID"}
-                else 400
-            )
-            await _send_safe_error(
-                scope, send, SafeError.for_code(failure.code), status_code
-            )
-            return
-
-        _set_lifecycle_result(scope, header_admission="accepted")
-
-        body = await request.body()
-        if len(body) > 65536:
-            _set_lifecycle_result(
-                scope,
-                result_state="request_rejected",
-                safe_error_code="INVALID_ARGUMENT",
-            )
-            await _send_safe_error(
-                scope, send, SafeError.for_code("INVALID_ARGUMENT"), 400
-            )
-            return
-        if _is_initialize(body):
-            try:
-                await self._rest_client.admit_session(headers)
-            except RestFailure as failure:
-                _set_lifecycle_result(
-                    scope,
-                    result_state="session_rejected",
-                    crmt_admission="rejected",
-                    safe_error_code=failure.error.code,
-                )
-                await _send_safe_error(scope, send, failure.error, failure.status_code)
-                return
-            _set_lifecycle_result(scope, crmt_admission="admitted")
-
-        sent = False
-
-        async def replay() -> Message:
-            nonlocal sent
-            if sent:
-                return {"type": "http.request", "body": b"", "more_body": False}
-            sent = True
-            return {"type": "http.request", "body": body, "more_body": False}
-
-        await self._app(scope, replay, send)
-
-
-class _RequestLoggingMiddleware:
-    """Record safe public HTTP lifecycle events with a per-request trace ID."""
-
-    def __init__(self, app: ASGIApp) -> None:
-        self._app = app
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
-            await self._app(scope, receive, send)
-            return
-        structlog.contextvars.clear_contextvars()
-        trace_id = _request_correlation_id(scope) or str(uuid4())
-        structlog.contextvars.bind_contextvars(trace_id=trace_id)
-        route = scope.get("path", "")
-        started_at = perf_counter()
-        status_code: int | None = None
-        logger.info("http_request_received", route=route, trace_id=trace_id)
-
-        async def send_with_status(message: Message) -> None:
-            nonlocal status_code
-            if message["type"] == "http.response.start":
-                status_code = message["status"]
-            await send(message)
-
-        try:
-            await self._app(scope, receive, send_with_status)
-            outcome = _lifecycle_result(scope)
-            event_data = {
-                "route": route,
-                "trace_id": trace_id,
-                "status_code": status_code,
-                "duration_ms": _duration_ms(started_at),
-                **outcome,
-            }
-            if outcome.get("result_state", "completed") != "completed":
-                _log_response_failure(event_data)
-            else:
-                logger.info("http_request_completed", **event_data)
-        except Exception:
-            logger.exception(
-                "http_request_failed",
-                route=route,
-                trace_id=trace_id,
-                result_state="failed",
-                status_code=status_code,
-                duration_ms=_duration_ms(started_at),
-            )
-            raise
-        finally:
-            structlog.contextvars.clear_contextvars()
-
-
-def _request_correlation_id(scope: Scope) -> str | None:
-    values = [
-        value.decode("latin-1")
-        for name, value in scope.get("headers", [])
-        if name.lower() == CORRELATION_ID_HEADER.lower().encode()
-    ]
-    if len(values) != 1:
-        return None
-    try:
-        return str(UUID(values[0]))
-    except ValueError:
-        return None
-
-
-def _set_lifecycle_result(scope: Scope, **values: str) -> None:
-    outcome = scope.setdefault("attendance_mcp.lifecycle_result", {})
-    outcome.update(values)
-
-
-def _lifecycle_result(scope: Scope) -> dict[str, str]:
-    return {"result_state": "completed"} | scope.get(
-        "attendance_mcp.lifecycle_result", {}
-    )
-
-
-def _duration_ms(started_at: float) -> int:
-    return round((perf_counter() - started_at) * 1000)
-
-
-def _log_response_failure(event_data: dict[str, object]) -> None:
-    status_code = event_data["status_code"]
-    if isinstance(status_code, int) and status_code >= 500:
-        logger.error("http_request_failed", **event_data)
-    else:
-        logger.warning("http_request_failed", **event_data)
-
-
-class _McpContractVersionMiddleware:
-    """Publish the frozen MCP contract version on every MCP HTTP response."""
-
-    def __init__(self, app: ASGIApp) -> None:
-        self._app = app
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope["path"] != "/mcp":
-            await self._app(scope, receive, send)
-            return
-
-        async def send_with_contract_version(message: Message) -> None:
-            if message["type"] == "http.response.start":
-                headers = [
-                    (name, value)
-                    for name, value in message.get("headers", [])
-                    if name.lower() != MCP_CONTRACT_VERSION_HEADER.lower().encode()
-                ]
-                headers.append(
-                    (
-                        MCP_CONTRACT_VERSION_HEADER.lower().encode(),
-                        MCP_CONTRACT_VERSION.encode(),
-                    )
-                )
-                message["headers"] = headers
-            await send(message)
-
-        await self._app(scope, receive, send_with_contract_version)
-
-
-def _is_initialize(body: bytes) -> bool:
-    try:
-        value: Any = json.loads(body)
-    except (TypeError, ValueError):
-        return False
-    return isinstance(value, dict) and value.get("method") == "initialize"
-
-
-async def _send_safe_error(
-    scope: Scope, send: Send, error: SafeError, status_code: int
-) -> None:
-    response = JSONResponse(error.model_dump(), status_code=status_code)
-    await response(scope, _empty_receive, send)
-
-
-async def _empty_receive() -> Message:
-    return {"type": "http.disconnect"}

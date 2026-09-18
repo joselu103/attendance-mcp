@@ -163,8 +163,61 @@ async def test_mcp_rejects_missing_or_malformed_forwarded_headers(app) -> None:
 
     assert missing.status_code == 401
     assert missing.json()["code"] == "AUTHENTICATION_REQUIRED"
+    assert missing.headers["X-Attendance-MCP-Contract-Version"] == "1.2.0"
     assert malformed.status_code == 400
     assert malformed.json()["code"] == "CORRELATION_ID_INVALID"
+    assert malformed.headers["X-Attendance-MCP-Contract-Version"] == "1.2.0"
+
+
+@pytest.mark.asyncio
+async def test_mcp_rejects_duplicate_correlation_and_oversized_bodies_safely(
+    app, upstream_requests, monkeypatch
+) -> None:
+    events: list[tuple[str, str, dict[str, object]]] = []
+
+    class CapturingLogger:
+        def info(self, event: str, **values: object) -> None:
+            events.append(("info", event, values))
+
+        def warning(self, event: str, **values: object) -> None:
+            events.append(("warning", event, values))
+
+        def error(self, event: str, **values: object) -> None:
+            events.append(("error", event, values))
+
+        def exception(self, event: str, **values: object) -> None:
+            events.append(("exception", event, values))
+
+    monkeypatch.setattr("attendance_mcp.http_lifecycle.logger", CapturingLogger())
+    duplicate_correlation = "33333333-3333-3333-3333-333333333333"
+    async with (
+        app.router.lifespan_context(app),
+        httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
+        ) as client,
+    ):
+        duplicate = await client.post(
+            "/mcp",
+            headers=[
+                ("Authorization", "Bearer delegated-token"),
+                ("X-Correlation-ID", duplicate_correlation),
+                ("X-Correlation-ID", duplicate_correlation),
+            ],
+            json={"method": "initialize"},
+        )
+        oversized = await client.post("/mcp", headers=HEADERS, content=b"x" * 65_537)
+
+    assert duplicate.status_code == 400
+    assert duplicate.json()["code"] == "CORRELATION_ID_INVALID"
+    assert duplicate.headers["X-Attendance-MCP-Contract-Version"] == "1.2.0"
+    assert oversized.status_code == 400
+    assert oversized.json()["code"] == "INVALID_ARGUMENT"
+    assert oversized.headers["X-Attendance-MCP-Contract-Version"] == "1.2.0"
+    assert upstream_requests == []
+    received = [
+        values for _, event, values in events if event == "http_request_received"
+    ]
+    assert received[0]["trace_id"] != duplicate_correlation
 
 
 @pytest.mark.asyncio
@@ -254,7 +307,7 @@ async def test_request_lifecycle_records_only_safe_admission_outcomes(
             204, headers={"X-Attendance-API-Contract-Version": "1.0.0"}
         )
 
-    monkeypatch.setattr("attendance_mcp.app.logger", CapturingLogger())
+    monkeypatch.setattr("attendance_mcp.http_lifecycle.logger", CapturingLogger())
     initialize = {
         "jsonrpc": "2.0",
         "id": 1,

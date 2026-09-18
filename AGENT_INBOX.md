@@ -2,8 +2,8 @@
 
 > **Status:** Completed
 >
-> **Objective:** Make each named CRMT REST-client operation's route and safe
-> observability identity inseparable in one private representation.
+> **Objective:** Collapse the MCP HTTP lifecycle behind one private ASGI-facing
+> module.
 >
 > **Contract context:** Preserve MCP contract `1.2.0`, Streamable HTTP behavior,
 > tool names, schemas, defaults, descriptions, routes, allow-listed header
@@ -13,15 +13,18 @@
 > behavior. Do not use secrets, SQL Server, raw attendance data, or external
 > deployments.
 >
-> **Verification:** Added REST-client seam coverage for session admission and
-> all fourteen tool operations. Verified with `uv run pytest tests/test_rest_client.py`
-> (20 passed), `uv run pytest` (39 passed), `uv run ruff check .`, and
+> **Verification:** Added public ASGI coverage for safe rejected-header and
+> oversized-body responses, duplicate correlation rejection, contract-version
+> publication, and generated trace IDs. Verified with
+> `uv run pytest tests/test_app.py tests/test_logging.py` (19 passed),
+> `uv run pytest` (39 passed), `uv run ruff check .`, and
 > `uv run ruff format --check .`.
 >
-> **Definition of done:** Completed locally: a private immutable operation
-> record owns each named operation's method, route template, and log identity;
-> reverse route parsing is removed, and all frozen adapter behavior is locally
-> verified.
+> **Definition of done:** Completed locally: one private lifecycle wrapper owns header admission,
+> initialization admission, safe lifecycle outcomes, contract-version
+> publication, tracing, body replay, and lifecycle logging without middleware
+> ordering knowledge. Preserve MCP contract `1.2.0`, public health, the
+> FastMCP implementation, safe error behavior, and all adapter boundaries.
 
 The repository has been initialized with its agent operating documentation only.
 Before beginning an implementation slice, record an approved, bounded directive

@@ -2,16 +2,17 @@ import asyncio
 import logging
 from uuid import UUID
 
+import httpx
 import structlog
-from starlette.types import Message, Receive, Scope, Send
 
-from attendance_mcp.app import _RequestLoggingMiddleware
+from attendance_mcp.app import create_app
 from attendance_mcp.logging import (
     REDACTED,
     _redactor,
     configure_logging,
     uvicorn_log_config,
 )
+from attendance_mcp.settings import Settings
 
 
 def test_local_logging_uses_debug_console_renderer_and_quiet_external_logs() -> None:
@@ -51,6 +52,10 @@ def test_uvicorn_config_keeps_access_logs_and_quiets_framework_logs() -> None:
     assert config["loggers"]["uvicorn.access"]["level"] == "INFO"
 
 
+async def _context() -> dict[str, object]:
+    return structlog.contextvars.get_contextvars()
+
+
 def test_standard_metadata_and_context_flow_across_async_work_then_clear() -> None:
     configure_logging(environment="production")
     processors = structlog.get_config()["processors"][:-1]
@@ -75,42 +80,6 @@ def test_standard_metadata_and_context_flow_across_async_work_then_clear() -> No
     assert structlog.contextvars.get_contextvars() == {}
 
 
-async def _context() -> dict[str, object]:
-    return structlog.contextvars.get_contextvars()
-
-
-def test_request_middleware_clears_context_between_requests() -> None:
-    seen: list[dict[str, object]] = []
-
-    async def application(_: Scope, __: Receive, send: Send) -> None:
-        seen.append(structlog.contextvars.get_contextvars())
-        await send({"type": "http.response.start", "status": 200, "headers": []})
-        await send({"type": "http.response.body", "body": b""})
-
-    async def call(headers: list[tuple[bytes, bytes]]) -> None:
-        scope: Scope = {"type": "http", "headers": headers}
-
-        async def receive() -> Message:
-            return {"type": "http.disconnect"}
-
-        async def send(_: Message) -> None:
-            return None
-
-        await _RequestLoggingMiddleware(application)(scope, receive, send)
-
-    async def exercise() -> None:
-        await call([(b"x-correlation-id", b"11111111-1111-1111-1111-111111111111")])
-        await call([])
-
-    asyncio.run(exercise())
-
-    assert seen[0] == {"trace_id": "11111111-1111-1111-1111-111111111111"}
-    assert set(seen[1]) == {"trace_id"}
-    assert UUID(str(seen[1]["trace_id"]))
-    assert seen[1] != seen[0]
-    assert structlog.contextvars.get_contextvars() == {}
-
-
 def test_request_lifecycle_logs_safe_health_events_with_a_generated_trace_id(
     monkeypatch,
 ) -> None:
@@ -126,22 +95,18 @@ def test_request_lifecycle_logs_safe_health_events_with_a_generated_trace_id(
         def exception(self, event: str, **values: object) -> None:
             events.append(("exception", event, values))
 
-    monkeypatch.setattr("attendance_mcp.app.logger", CapturingLogger())
-
-    async def application(_: Scope, __: Receive, send: Send) -> None:
-        await send({"type": "http.response.start", "status": 200, "headers": []})
-        await send({"type": "http.response.body", "body": b""})
+    monkeypatch.setattr("attendance_mcp.http_lifecycle.logger", CapturingLogger())
 
     async def exercise() -> None:
-        async def receive() -> Message:
-            return {"type": "http.disconnect"}
-
-        async def send(_: Message) -> None:
-            return None
-
-        await _RequestLoggingMiddleware(application)(
-            {"type": "http", "path": "/health", "headers": []}, receive, send
-        )
+        app = create_app(Settings(crmt_base_url="https://crmt.example"))
+        async with (
+            app.router.lifespan_context(app),
+            httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
+            ) as client,
+        ):
+            response = await client.get("/health")
+        assert response.status_code == 200
 
     asyncio.run(exercise())
 
