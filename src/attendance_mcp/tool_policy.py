@@ -65,13 +65,6 @@ class ToolCallPolicy:
                 )
                 raise
             logger.info(
-                "mcp_tool_operation_step_completed",
-                handler=handler,
-                step="crmt_rest_call",
-                input_shape=input_shape,
-                duration_ms=_duration_ms(started_at),
-            )
-            logger.info(
                 "mcp_tool_operation_succeeded",
                 handler=handler,
                 step="completed",
@@ -99,7 +92,8 @@ class ToolCallPolicy:
 
 
 def forward_headers(request: Request) -> dict[str, str]:
-    """Return exactly the two valid caller headers allowed to reach CRMT."""
+    """Return exactly the two valid caller headers allowed to reach the
+    Attendance RestAPI."""
     authorization = request.headers.getlist(AUTHORIZATION_HEADER)
     correlation_id = request.headers.getlist(CORRELATION_ID_HEADER)
     if len(authorization) != 1:

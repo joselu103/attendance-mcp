@@ -54,13 +54,13 @@ def configure_logging(
 
 
 def uvicorn_log_config(*, external_debug: bool) -> dict[str, Any]:
-    """Keep one access record while applying the external logging policy."""
+    """Keep normal server and access visibility with opt-in diagnostics."""
     from uvicorn.config import LOGGING_CONFIG
 
     config = deepcopy(LOGGING_CONFIG)
-    external_level = "DEBUG" if external_debug else "WARNING"
-    config["loggers"]["uvicorn"]["level"] = external_level
-    config["loggers"]["uvicorn.error"]["level"] = external_level
+    server_level = "DEBUG" if external_debug else "INFO"
+    config["loggers"]["uvicorn"]["level"] = server_level
+    config["loggers"]["uvicorn.error"]["level"] = server_level
     config["loggers"]["uvicorn.access"]["level"] = "INFO"
     return config
 

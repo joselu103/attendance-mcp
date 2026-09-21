@@ -44,11 +44,19 @@ def test_external_debug_opt_in_enables_external_loggers() -> None:
     assert logging.getLogger("fastmcp").getEffectiveLevel() == logging.DEBUG
 
 
-def test_uvicorn_config_keeps_access_logs_and_quiets_framework_logs() -> None:
+def test_uvicorn_config_keeps_server_and_access_logs_visible() -> None:
     config = uvicorn_log_config(external_debug=False)
 
-    assert config["loggers"]["uvicorn"]["level"] == "WARNING"
-    assert config["loggers"]["uvicorn.error"]["level"] == "WARNING"
+    assert config["loggers"]["uvicorn"]["level"] == "INFO"
+    assert config["loggers"]["uvicorn.error"]["level"] == "INFO"
+    assert config["loggers"]["uvicorn.access"]["level"] == "INFO"
+
+
+def test_uvicorn_config_enables_server_debug_diagnostics_on_opt_in() -> None:
+    config = uvicorn_log_config(external_debug=True)
+
+    assert config["loggers"]["uvicorn"]["level"] == "DEBUG"
+    assert config["loggers"]["uvicorn.error"]["level"] == "DEBUG"
     assert config["loggers"]["uvicorn.access"]["level"] == "INFO"
 
 
