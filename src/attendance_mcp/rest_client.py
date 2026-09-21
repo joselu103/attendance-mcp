@@ -17,7 +17,7 @@ logger = structlog.get_logger(__name__)
 
 @dataclass(frozen=True)
 class _Operation:
-    """One CRMT operation's routing and safe observability facts."""
+    """Store an Attendance REST API operation's route and safe observability facts."""
 
     name: str
     method: str
@@ -71,7 +71,12 @@ _GET_ORGANIZATION_ATTENDANCE_ANALYSIS = _Operation(
 
 
 class RestFailure(Exception):
-    """A CRMT-safe failure suitable for an MCP response."""
+    """Represent an Attendance REST API failure safe to return through MCP.
+
+    Attributes:
+        error: Validated public error envelope.
+        status_code: HTTP status to use for the MCP response.
+    """
 
     def __init__(self, error: SafeError, *, status_code: int = 503) -> None:
         self.error = error
@@ -79,12 +84,18 @@ class RestFailure(Exception):
 
 
 class CrmtRestClient:
-    """Forward only the admitted caller headers to CRMT REST."""
+    """Call the Attendance REST API through the adapter's only REST seam.
+
+    Every operation forwards only the admitted authorization and correlation
+    headers. Transport, contract-version, malformed-response, and unsafe-error
+    failures become ``RestFailure`` with a public safe error.
+    """
 
     def __init__(self, *, client: httpx.AsyncClient) -> None:
         self._client = client
 
     async def admit_session(self, headers: Mapping[str, str]) -> None:
+        """Ask the Attendance REST API to admit an MCP initialization request."""
         await self._request(_ADMIT_SESSION, headers=headers)
 
     async def list_my_attendance_events(
@@ -262,7 +273,6 @@ class CrmtRestClient:
         )
 
     async def aclose(self) -> None:
-        """Close the owned HTTP client during ASGI shutdown."""
         await self._client.aclose()
 
     async def _request(

@@ -1,4 +1,4 @@
-"""Small, adapter-owned representations of CRMT's safe public boundary."""
+"""Small, adapter-owned representations of the Attendance REST API's safe boundary."""
 
 from typing import Literal
 
@@ -35,7 +35,11 @@ SAFE_MESSAGES: dict[SafeErrorCode, str] = {
 
 
 class SafeError(BaseModel):
-    """A validated CRMT envelope; nothing else crosses the adapter boundary."""
+    """Represent a safe error that may cross the adapter boundary.
+
+    Only known code and message pairs from the Attendance REST API validate.
+    Extra fields and altered messages are rejected.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -48,6 +52,7 @@ class SafeError(BaseModel):
 
     @classmethod
     def from_upstream(cls, value: object) -> "SafeError | None":
+        """Return a safe error only when an upstream value matches the public contract."""
         if not isinstance(value, dict):
             return None
         try:

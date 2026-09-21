@@ -1,15 +1,15 @@
 # Agent and Issue Navigation
 
-Attendance MCP is the stateless, public MCP-to-REST adapter. Attendance CRMT
-REST is the only authority for delegated-token validation, requester identity
+Attendance MCP is the stateless, public MCP-to-REST adapter. The Attendance REST
+API is the only authority for delegated-token validation, requester identity
 and employee mapping, authorization, audit, attendance business rules, and SQL
-Server access. The current MCP runtime in
-[Attendance CRMT](https://github.com/joselu103/attendance-crmt) is a temporary
-compatibility bridge, not implementation to copy into this repository. This
-repository is [Attendance MCP](https://github.com/joselu103/attendance-mcp).
+Server access. The Attendance REST API implementation is maintained in
+[Attendance CRMT](https://github.com/joselu103/attendance-crmt); the public MCP
+runtime is maintained in [Attendance MCP](https://github.com/joselu103/attendance-mcp).
 
-The adapter preserves the legacy MCP tool interface and forwards exactly the
-delegated bearer and correlation headers to CRMT. It does not implement CRMT
+The adapter provides the MCP tool interface and forwards exactly the delegated
+bearer and correlation headers to the Attendance REST API. It does not implement
+the Attendance REST API's
 domain behavior, derive identity or authorization, or hard-code credentials,
 hostnames, or environment data.
 
@@ -28,10 +28,10 @@ then follow the REST/MCP contracts they name:
    and the session-admission contract in
    [attendance-crmt#18](https://github.com/joselu103/attendance-crmt/issues/18).
 
-Do not discover adapter scope by searching the CRMT MCP tool registration. Use
-the contract and this fixed legacy-tool inventory instead:
+Do not discover adapter scope by searching the Attendance REST API implementation.
+Use the contract and this fixed MCP tool inventory instead:
 
-| Area | Legacy MCP tools |
+| Area | MCP tools |
 | --- | --- |
 | Requester attendance | `list_my_attendance_events` |
 | Catalog | `list_employees`, `get_employee`, `list_punch_types`, `list_locations` |

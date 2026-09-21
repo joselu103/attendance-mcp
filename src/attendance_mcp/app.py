@@ -20,7 +20,13 @@ from attendance_mcp.tool_policy import ToolCallPolicy
 def create_app(
     settings: Settings | None = None, *, client: httpx.AsyncClient | None = None
 ) -> Starlette:
-    """Create the public health route and the mounted Streamable HTTP server."""
+    """Build the public health endpoint and Streamable HTTP MCP server.
+
+    Args:
+        settings: Runtime configuration. Loads from the environment when omitted.
+        client: Attendance REST API client to use. A supplied client remains owned
+            by the caller; the app closes a client it creates during shutdown.
+    """
     runtime_settings = settings or Settings()
     owns_client = client is None
     rest_client = CrmtRestClient(
@@ -50,7 +56,6 @@ def create_app(
         offset: int = 0,
         ctx: Context | None = None,
     ) -> dict[str, object]:
-        """Map the frozen legacy MCP request directly to its CRMT REST operation."""
         return await tool_call_policy.call(
             ctx,
             lambda headers: rest_client.list_my_attendance_events(
@@ -76,7 +81,6 @@ def create_app(
     async def list_employees(
         limit: int = 50, offset: int = 0, ctx: Context | None = None
     ) -> dict[str, object]:
-        """Map the legacy active-employee page to CRMT REST."""
         return await tool_call_policy.call(
             ctx,
             lambda headers: rest_client.list_employees(
@@ -94,7 +98,6 @@ def create_app(
     async def get_employee(
         employee_id: int, ctx: Context | None = None
     ) -> dict[str, object]:
-        """Map the legacy employee lookup to CRMT REST."""
         return await tool_call_policy.call(
             ctx,
             lambda headers: rest_client.get_employee(
@@ -114,7 +117,6 @@ def create_app(
     async def list_punch_types(
         active_only: bool = True, ctx: Context | None = None
     ) -> list[object]:
-        """Map the legacy punch-type lookup to CRMT REST."""
         return await tool_call_policy.call(
             ctx,
             lambda headers: rest_client.list_punch_types(
@@ -129,7 +131,6 @@ def create_app(
     )
     @tool_call_policy.instrument
     async def list_locations(ctx: Context | None = None) -> list[object]:
-        """Map the legacy location lookup to CRMT REST."""
         return await tool_call_policy.call(
             ctx, lambda headers: rest_client.list_locations(headers=headers)
         )
@@ -151,7 +152,6 @@ def create_app(
         offset: int = 0,
         ctx: Context | None = None,
     ) -> dict[str, object]:
-        """Map the legacy administrator event list directly to CRMT REST."""
         return await tool_call_policy.call(
             ctx,
             lambda headers: rest_client.list_attendance_events(
@@ -175,7 +175,6 @@ def create_app(
     async def get_attendance_event(
         attendance_event_id: int, ctx: Context | None = None
     ) -> dict[str, object]:
-        """Map the legacy administrator event detail directly to CRMT REST."""
         return await tool_call_policy.call(
             ctx,
             lambda headers: rest_client.get_attendance_event(
@@ -196,7 +195,6 @@ def create_app(
     async def get_daily_attendance(
         employee_id: int, day: date, ctx: Context | None = None
     ) -> dict[str, object]:
-        """Map the legacy daily administrator view directly to CRMT REST."""
         return await tool_call_policy.call(
             ctx,
             lambda headers: rest_client.get_daily_attendance(
@@ -221,7 +219,6 @@ def create_app(
         end_date: date,
         ctx: Context | None = None,
     ) -> dict[str, object]:
-        """Map the legacy planned-work administrator view directly to CRMT REST."""
         return await tool_call_policy.call(
             ctx,
             lambda headers: rest_client.get_planned_work(

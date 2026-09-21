@@ -5,7 +5,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Settings owned by the adapter, never delegated credentials."""
+    """Load adapter-owned runtime configuration from ``ATTENDANCE_MCP_`` variables.
+
+    Delegated credentials are request headers, not settings. The compatibility
+    name ``crmt_base_url`` identifies the Attendance REST API base URL.
+    """
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -14,7 +18,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    crmt_base_url: AnyHttpUrl = Field(description="Attendance CRMT REST base URL")
+    crmt_base_url: AnyHttpUrl = Field(description="Attendance REST API base URL")
     request_timeout_seconds: float = Field(default=10, gt=0, le=30)
     runtime_environment: str = "development"
     log_external_debug: bool = False

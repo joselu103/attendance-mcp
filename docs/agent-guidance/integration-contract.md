@@ -1,6 +1,6 @@
 # MCP/REST Integration Contract
 
-Treat the versioned Attendance CRMT REST v1 contract and the accepted REST-core
+Treat the versioned Attendance REST API v1 contract and the accepted REST-core
 MCP-adapter architecture decision as the canonical sources for route behavior.
 Do not invent endpoints, token claims, employee mapping, authorization rules, or
 response fields beyond those contracts.
@@ -17,7 +17,7 @@ other caller-controlled headers. The adapter neither creates a second OBO exchan
 nor changes the existing Attendance audience or `attendance.access` delegated
 scope.
 
-Map only CRMT's safe error envelope to MCP-safe errors. Never expose tokens,
+Map only the Attendance REST API's safe error envelope to MCP-safe errors. Never expose tokens,
 claims, SQL, stack traces, raw upstream payloads, URLs, connection strings, or
 attendance data in tool errors, logs, fixtures, or verification evidence.
 

@@ -24,22 +24,22 @@
   },
   "dependencies_needed": {
     "attendance_crmt": [
-      "A locally verifiable Attendance CRMT REST v1 implementation and its versioned contract for adapter parity testing"
+      "A locally verifiable Attendance REST API v1 implementation and its versioned contract for adapter parity testing"
     ],
     "configuration": [
-      "Approved non-secret configuration for the Attendance CRMT REST base URL and adapter runtime"
+      "Approved non-secret configuration for the Attendance REST API base URL and adapter runtime"
     ]
   },
   "open_issues_or_blockers": [
-    "Local adapter tests verify the fourteen-tool canonical requester, catalog, administrative, and reporting MCP inventory; route/argument mappings; MCP schemas; contract-version headers; allowed header propagation; CRMT safe-error filtering; session admission; and public liveness.",
-    "The repository-owned migration contract identifies Attendance MCP as the public Streamable HTTP owner and CRMT REST as its private authority while preserving MCP contract 1.2.0.",
+    "Local adapter tests verify the fourteen-tool canonical requester, catalog, administrative, and reporting MCP inventory; route/argument mappings; MCP schemas; contract-version headers; allowed header propagation; Attendance REST API safe-error filtering; session admission; and public liveness.",
+    "The repository-owned migration contract identifies Attendance MCP as the public Streamable HTTP owner and the Attendance REST API as its private authority while preserving MCP contract 1.2.0.",
     "The local Docker image attendance-mcp:local-test builds successfully from the merged adapter source.",
     "Structured runtime logging is locally verified with development console DEBUG output, non-local JSON INFO output, UTC and callsite metadata, request-scoped trace context, and recursive redaction of configured sensitive keys and values.",
     "Project-owned logging is locally verified: adapter structured events remain development DEBUG or non-local INFO, standard-library external logs default to WARNING, FastMCP follows that policy, Uvicorn retains one INFO access record, and ATTENDANCE_MCP_LOG_EXTERNAL_DEBUG explicitly enables external DEBUG diagnostics.",
     "One private MCP HTTP lifecycle wrapper is locally verified to own tracing, header admission, session admission, safe lifecycle outcomes, contract-version response publication, body replay, and lifecycle logging. Public ASGI tests preserve health, safe rejected-header and oversized-body responses, duplicate correlation rejection, allowed forwarding, session admission, and safe admission observability.",
-    "All fourteen read-only MCP tools use a shared internal tool-call policy and their sole CRMT REST-client seam remains unchanged. The policy derives stable value-free handler labels and sanitized input shapes from each typed handler interface, centralizes header forwarding and safe-error translation, and preserves lifecycle timing and outcomes. In-process Streamable HTTP regressions verify admitted requester and reporting tool calls emit safe MCP and CRMT lifecycles and preserve route arguments and allowed headers.",
-    "All fifteen named CRMT REST-client operations, including session admission, locally derive their concrete request path and value-free lifecycle identity from one private immutable operation record. In-process REST-client tests verify each public operation's method, route, stable operation label, and safe route template; the prior reverse route parser is removed.",
-    "The contract-1.2.0 Streamable HTTP catalog is locally verified with fourteen string-described, read-only annotated legacy tools and the compatible requester schema. The in-process Teams bot MCP session discovers and admits that catalog using fixture-only transport. Verified with 39 local tests, Ruff lint, and formatting checks.",
-    "No authorized non-production deployment, Entra/OBO, CRMT audit-record comparison, or end-to-end embedded-bridge parity evidence exists; local implementation does not clear these external gates."
+    "All fourteen read-only MCP tools use a shared internal tool-call policy and their sole Attendance REST API client seam remains unchanged. The policy derives stable value-free handler labels and sanitized input shapes from each typed handler interface, centralizes header forwarding and safe-error translation, and preserves lifecycle timing and outcomes. In-process Streamable HTTP regressions verify admitted requester and reporting tool calls emit safe MCP and Attendance REST API lifecycles and preserve route arguments and allowed headers.",
+    "All fifteen named Attendance REST API client operations, including session admission, locally derive their concrete request path and value-free lifecycle identity from one private immutable operation record. In-process REST-client tests verify each public operation's method, route, stable operation label, and safe route template; the prior reverse route parser is removed.",
+    "The contract-1.2.0 Streamable HTTP catalog is locally verified with fourteen string-described, read-only annotated MCP tools and the compatible requester schema. The in-process Teams bot MCP session discovers and admits that catalog using fixture-only transport. Verified with 39 local tests, Ruff lint, and formatting checks.",
+    "No authorized non-production deployment, Entra/OBO, Attendance REST API audit-record comparison, or end-to-end parity evidence exists; local implementation does not clear these external gates."
   ]
 }

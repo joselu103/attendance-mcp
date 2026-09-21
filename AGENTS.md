@@ -3,7 +3,7 @@
 Attendance MCP is the thin Streamable HTTP MCP-to-REST adapter in the Attendance
 ecosystem. It owns MCP protocol behavior, read-only tool metadata, allow-listed
 header forwarding, REST-to-MCP safe-error translation, and one deep REST-client
-seam. Attendance CRMT remains the protected authority for token validation,
+seam. The Attendance REST API remains the protected authority for token validation,
 requester identity and employee mapping, authorization, audit, attendance rules,
 and SQL Server access.
 

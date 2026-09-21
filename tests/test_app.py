@@ -221,7 +221,7 @@ async def test_mcp_rejects_duplicate_correlation_and_oversized_bodies_safely(
 
 
 @pytest.mark.asyncio
-async def test_catalog_admits_every_legacy_read_only_tool_for_the_teams_bot(
+async def test_catalog_admits_every_read_only_tool_for_the_teams_bot(
     app,
 ) -> None:
     """Exercise the SDK server catalog against the bot's safe admission contract."""
@@ -387,7 +387,7 @@ async def test_request_lifecycle_records_only_safe_admission_outcomes(
 
 
 @pytest.mark.asyncio
-async def test_administrative_tools_map_legacy_arguments_to_crmt(
+async def test_administrative_tools_map_arguments_to_attendance_rest_api(
     app, upstream_requests
 ) -> None:
     async with (
@@ -518,7 +518,7 @@ async def test_administrative_tools_map_legacy_arguments_to_crmt(
 
 
 @pytest.mark.asyncio
-async def test_catalog_tools_preserve_legacy_names_defaults_and_rest_mappings(
+async def test_catalog_tools_preserve_names_defaults_and_rest_mappings(
     app, upstream_requests
 ) -> None:
     async with (
@@ -644,7 +644,7 @@ async def test_catalog_includes_read_only_reporting_tools(app) -> None:
 
 
 @pytest.mark.asyncio
-async def test_reporting_tools_map_legacy_arguments_to_crmt(
+async def test_reporting_tools_map_arguments_to_attendance_rest_api(
     app, upstream_requests
 ) -> None:
     async with (
@@ -860,7 +860,6 @@ async def test_tool_call_logs_safe_mcp_and_crmt_lifecycles_end_to_end(
     tool_events = [event for event in mcp_events if event[0].startswith("mcp_tool_")]
     assert [event for event, _ in tool_events] == [
         "mcp_tool_operation_started",
-        "mcp_tool_operation_step_completed",
         "mcp_tool_operation_succeeded",
     ]
     assert all(
