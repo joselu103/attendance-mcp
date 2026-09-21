@@ -31,7 +31,19 @@ def configure_logging(
     sensitive_keys: Iterable[str] = (),
     sensitive_values: Iterable[str] = (),
 ) -> None:
-    """Configure deterministic, safe output for the active runtime environment."""
+    """Configure structured adapter logging and recursive redaction.
+
+    Development and local environments emit DEBUG console logs; other
+    environments emit INFO JSON logs. Dependency logs stay at WARNING unless
+    external diagnostics are enabled.
+
+    Args:
+        environment: Runtime environment that selects the adapter log format and
+            level.
+        external_debug: Enable DEBUG logs from FastMCP and other dependencies.
+        sensitive_keys: Additional event-dictionary keys to redact.
+        sensitive_values: Exact string values to redact wherever they occur.
+    """
     is_local = environment.casefold() in {"local", "development"}
     adapter_level = logging.DEBUG if is_local else logging.INFO
     external_level = logging.DEBUG if external_debug else logging.WARNING
@@ -54,7 +66,11 @@ def configure_logging(
 
 
 def uvicorn_log_config(*, external_debug: bool) -> dict[str, Any]:
-    """Keep normal server and access visibility with opt-in diagnostics."""
+    """Return Uvicorn logging that keeps access logs visible.
+
+    Server diagnostics use DEBUG only when requested; access records remain at
+    INFO in every environment.
+    """
     from uvicorn.config import LOGGING_CONFIG
 
     config = deepcopy(LOGGING_CONFIG)

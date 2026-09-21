@@ -8,7 +8,7 @@
 > **Contract context:** Preserve MCP contract `1.2.0`, Streamable HTTP behavior,
 > tool names, schemas, defaults, descriptions, routes, allow-listed header
 > forwarding, and all safe logging/redaction guarantees. Preserve the named
-> `CrmtRestClient` interface and its sole REST-client seam; CRMT remains the
+> `CrmtRestClient` interface and its sole REST-client seam; the Attendance REST API remains the
 > authority for token validation, identity, authorization, audit, and attendance
 > behavior. Do not use secrets, SQL Server, raw attendance data, or external
 > deployments.
@@ -33,13 +33,13 @@ done, and evidence-backed `AGENT_STATE.json` update.
 
 ## Standing Context
 
-- The repository implements a thin Streamable HTTP MCP adapter over Attendance
-  CRMT REST v1.
+- The repository implements a thin Streamable HTTP MCP adapter over the
+  Attendance REST API v1.
 - Preserve MCP contract `1.2.0` until black-box REST parity is proven.
 - The adapter must forward the delegated Attendance bearer token and the same
   UUID `X-Correlation-ID` unchanged; it must not parse, validate, cache, store,
   or log that token.
 - Identity, authorization, audit, attendance behavior, and SQL Server access
-  remain exclusively in Attendance CRMT.
+  remain exclusively in the Attendance REST API.
 - All product tools are read-only until a separately approved contract changes
   that scope.

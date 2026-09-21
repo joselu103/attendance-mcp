@@ -1,7 +1,7 @@
 [project]
 name = "attendance-mcp"
 version = "0.1.0"
-description = "Thin Streamable HTTP MCP adapter for Attendance CRMT REST."
+description = "Thin Streamable HTTP MCP adapter for the Attendance REST API."
 requires-python = ">=3.12"
 dependencies = [
     "fastmcp==3.4.5",

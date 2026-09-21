@@ -27,19 +27,24 @@ T = TypeVar("T")
 
 
 class HeaderFailure(ValueError):
-    """A local, safe rejection before a caller header can be forwarded."""
+    """Represent a safe rejection before caller headers reach the REST API."""
 
     def __init__(self, code: str) -> None:
         self.code = code
 
 
 class ToolCallPolicy:
-    """Hide shared tool invocation and value-free lifecycle policy."""
+    """Apply shared header, error, and value-free logging policy to MCP tools.
+
+    Instrumented handlers log only their declared input shape, never argument
+    values. Calls forward admitted headers and translate safe REST failures to
+    MCP tool errors.
+    """
 
     def instrument(
         self, operation: Callable[P, Awaitable[T]]
     ) -> Callable[P, Awaitable[T]]:
-        """Log a tool lifecycle using only facts derived from its interface."""
+        """Wrap a handler with lifecycle logging derived from its signature."""
         handler = operation.__name__
         input_shape = _input_shape(operation)
 
@@ -80,7 +85,7 @@ class ToolCallPolicy:
         ctx: Context | None,
         operation: Callable[[Mapping[str, str]], Awaitable[T]],
     ) -> T:
-        """Forward admitted headers and translate only safe call failures."""
+        """Invoke an operation with admitted headers and MCP-safe failures."""
         try:
             return await operation(forward_headers(_context_request(ctx)))
         except RestFailure as failure:
@@ -92,8 +97,7 @@ class ToolCallPolicy:
 
 
 def forward_headers(request: Request) -> dict[str, str]:
-    """Return exactly the two valid caller headers allowed to reach the
-    Attendance RestAPI."""
+    """Return the only two valid caller headers allowed to reach the Attendance REST API."""
     authorization = request.headers.getlist(AUTHORIZATION_HEADER)
     correlation_id = request.headers.getlist(CORRELATION_ID_HEADER)
     if len(authorization) != 1:

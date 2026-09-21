@@ -201,9 +201,7 @@ async def test_named_operations_route_and_log_stable_facts(
 
 
 @pytest.mark.asyncio
-async def test_requester_events_preserve_the_frozen_route_arguments_and_headers() -> (
-    None
-):
+async def test_requester_events_preserve_route_arguments_and_headers() -> None:
     received: list[httpx.Request] = []
 
     async def handler(request: httpx.Request) -> httpx.Response:

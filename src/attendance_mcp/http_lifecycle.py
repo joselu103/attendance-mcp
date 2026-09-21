@@ -29,7 +29,13 @@ logger = structlog.get_logger(__name__)
 
 
 class _McpHttpLifecycle:
-    """Own MCP admission, response publication, and safe HTTP observability."""
+    """Apply the HTTP contract before FastMCP handles an MCP request.
+
+    Every MCP request receives trace logging and contract-version publication.
+    Initialization requests additionally require admitted headers, a bounded
+    body, and Attendance REST API session admission. Other ASGI traffic passes
+    through unchanged apart from lifecycle logging.
+    """
 
     def __init__(self, app: ASGIApp, rest_client: CrmtRestClient) -> None:
         self._app = app
