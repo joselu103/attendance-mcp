@@ -2,23 +2,29 @@
 
 > **Status:** Completed
 >
-> **Objective:** Apply project-owned runtime logging: preserve safe structured
-> adapter lifecycle telemetry and one Uvicorn access record while suppressing
-> routine external-library diagnostics by default.
+> **Objective:** Collapse the MCP HTTP lifecycle behind one private ASGI-facing
+> module.
 >
 > **Contract context:** Preserve MCP contract `1.2.0`, Streamable HTTP behavior,
-> allowed header forwarding, and all safe logging/redaction guarantees. CRMT
-> remains the authority for token validation, identity, authorization, audit,
-> and attendance behavior. Do not use secrets, SQL Server, raw attendance data,
-> or external deployments.
+> tool names, schemas, defaults, descriptions, routes, allow-listed header
+> forwarding, and all safe logging/redaction guarantees. Preserve the named
+> `CrmtRestClient` interface and its sole REST-client seam; CRMT remains the
+> authority for token validation, identity, authorization, audit, and attendance
+> behavior. Do not use secrets, SQL Server, raw attendance data, or external
+> deployments.
 >
-> **Verification:** Added focused logging coverage. Verified with `uv run pytest`
-> (38 passed), `uv run ruff check .`, and `uv run ruff format --check .`.
+> **Verification:** Added public ASGI coverage for safe rejected-header and
+> oversized-body responses, duplicate correlation rejection, contract-version
+> publication, and generated trace IDs. Verified with
+> `uv run pytest tests/test_app.py tests/test_logging.py` (19 passed),
+> `uv run pytest` (39 passed), `uv run ruff check .`, and
+> `uv run ruff format --check .`.
 >
-> **Definition of done:** Completed locally: adapter logs remain structured and safe; ordinary
-> third-party output is quiet by default; an explicitly enabled non-secret
-> diagnostic setting restores external DEBUG logging; Uvicorn retains exactly
-> one access record per request.
+> **Definition of done:** Completed locally: one private lifecycle wrapper owns header admission,
+> initialization admission, safe lifecycle outcomes, contract-version
+> publication, tracing, body replay, and lifecycle logging without middleware
+> ordering knowledge. Preserve MCP contract `1.2.0`, public health, the
+> FastMCP implementation, safe error behavior, and all adapter boundaries.
 
 The repository has been initialized with its agent operating documentation only.
 Before beginning an implementation slice, record an approved, bounded directive
