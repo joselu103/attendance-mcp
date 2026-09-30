@@ -8,6 +8,7 @@
       "list_my_attendance_events(start_date, end_date, limit=50, offset=0)",
       "list_employees(limit=50, offset=0)",
       "get_employee(employee_id)",
+      "resolve_employee(employee_id | username | email)",
       "list_punch_types(active_only=true)",
       "list_locations()",
       "list_attendance_events(employee_id, start_date, end_date, limit=50, offset=0)",
@@ -39,7 +40,7 @@
     "One private MCP HTTP lifecycle wrapper is locally verified to own tracing, header admission, session admission, safe lifecycle outcomes, contract-version response publication, body replay, and lifecycle logging. Public ASGI tests preserve health, safe rejected-header and oversized-body responses, duplicate correlation rejection, allowed forwarding, session admission, and safe admission observability.",
     "All fourteen read-only MCP tools use a shared internal tool-call policy and their sole Attendance REST API client seam remains unchanged. The policy derives stable value-free handler labels and sanitized input shapes from each typed handler interface, centralizes header forwarding and safe-error translation, and preserves lifecycle timing and outcomes. In-process Streamable HTTP regressions verify admitted requester and reporting tool calls emit safe MCP and Attendance REST API lifecycles and preserve route arguments and allowed headers.",
     "All fifteen named Attendance REST API client operations, including session admission, locally derive their concrete request path and value-free lifecycle identity from one private immutable operation record. In-process REST-client tests verify each public operation's method, route, stable operation label, and safe route template; the prior reverse route parser is removed.",
-    "The contract-1.2.0 Streamable HTTP catalog is locally verified with fourteen string-described, read-only annotated MCP tools and the compatible requester schema. The in-process Teams bot MCP session discovers and admits that catalog using fixture-only transport. Verified with 39 local tests, Ruff lint, and formatting checks.",
+    "The contract-1.2.0 Streamable HTTP catalog is locally verified with fifteen string-described, read-only annotated MCP tools and the compatible requester schema. `resolve_employee` requires exactly one employee_id, username, or email selector and maps to GET /api/v1/employees/resolve through the sole REST-client seam; safe NOT_FOUND forwarding and bearer/correlation propagation are fixture-verified. `get_current_attendance` no longer advertises unknown status. The in-process Teams bot MCP session discovers and admits that catalog using fixture-only transport. Verified with 44 local tests, Ruff lint, and formatting checks.",
     "No authorized non-production deployment, Entra/OBO, Attendance REST API audit-record comparison, or end-to-end parity evidence exists; local implementation does not clear these external gates."
   ]
 }

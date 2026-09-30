@@ -45,6 +45,16 @@ HEADERS = {
             id="employee",
         ),
         pytest.param(
+            "resolve_employee",
+            "GET",
+            "/api/v1/employees/resolve",
+            "/api/v1/employees/resolve",
+            lambda client: client.resolve_employee(
+                headers=HEADERS, params={"username": "ada"}
+            ),
+            id="employee-resolver",
+        ),
+        pytest.param(
             "list_punch_types",
             "GET",
             "/api/v1/punch-types",
@@ -363,6 +373,43 @@ async def test_catalog_routes_preserve_arguments_and_forward_only_allowed_header
         assert request.headers["authorization"] == headers["Authorization"]
         assert request.headers["x-correlation-id"] == headers["X-Correlation-ID"]
         assert "x-caller-controlled" not in request.headers
+
+
+@pytest.mark.asyncio
+async def test_employee_resolver_preserves_exact_selector_headers_and_safe_errors() -> (
+    None
+):
+    received: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        received.append(request)
+        return httpx.Response(
+            404,
+            json={
+                "code": "NOT_FOUND",
+                "message": "The requested attendance resource was not found.",
+            },
+            headers={"X-Attendance-API-Contract-Version": "1.0.0"},
+        )
+
+    async with httpx.AsyncClient(
+        base_url="https://crmt.example", transport=httpx.MockTransport(handler)
+    ) as http_client:
+        with pytest.raises(RestFailure) as raised:
+            await CrmtRestClient(client=http_client).resolve_employee(
+                headers={
+                    **HEADERS,
+                    "X-Caller-Controlled": "must-not-forward",
+                },
+                params={"email": "ada@example.test"},
+            )
+
+    assert raised.value.error.code == "NOT_FOUND"
+    assert received[0].url.path == "/api/v1/employees/resolve"
+    assert dict(received[0].url.params) == {"email": "ada@example.test"}
+    assert received[0].headers["authorization"] == HEADERS["Authorization"]
+    assert received[0].headers["x-correlation-id"] == HEADERS["X-Correlation-ID"]
+    assert "x-caller-controlled" not in received[0].headers
 
 
 @pytest.mark.asyncio

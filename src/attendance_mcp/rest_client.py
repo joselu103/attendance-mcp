@@ -35,6 +35,7 @@ _LIST_MY_ATTENDANCE_EVENTS = _Operation(
 )
 _LIST_EMPLOYEES = _Operation("list_employees", "GET", "/api/v1/employees")
 _GET_EMPLOYEE = _Operation("get_employee", "GET", "/api/v1/employees/{employee_id}")
+_RESOLVE_EMPLOYEE = _Operation("resolve_employee", "GET", "/api/v1/employees/resolve")
 _LIST_PUNCH_TYPES = _Operation("list_punch_types", "GET", "/api/v1/punch-types")
 _LIST_LOCATIONS = _Operation("list_locations", "GET", "/api/v1/locations")
 _LIST_ATTENDANCE_EVENTS = _Operation(
@@ -116,6 +117,12 @@ class CrmtRestClient:
         return await self._get_object(
             _GET_EMPLOYEE, headers=headers, route_values={"employee_id": employee_id}
         )
+
+    async def resolve_employee(
+        self, *, headers: Mapping[str, str], params: Mapping[str, object]
+    ) -> dict[str, object]:
+        """Resolve one employee through the Attendance REST API authority."""
+        return await self._get_object(_RESOLVE_EMPLOYEE, headers=headers, params=params)
 
     async def list_punch_types(
         self, *, headers: Mapping[str, str], active_only: bool
