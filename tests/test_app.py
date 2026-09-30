@@ -25,6 +25,14 @@ def app(upstream_requests: list[httpx.Request]):
                 204, headers={"X-Attendance-API-Contract-Version": "1.0.0"}
             )
         catalog_payloads: dict[str, object] = {
+            "/api/v1/employees/resolve": {
+                "employee_id": 42,
+                "first_name": "Ada",
+                "last_name": "Lovelace",
+                "username": "ada",
+                "email": None,
+                "active": 1,
+            },
             "/api/v1/employees": {
                 "items": [],
                 "limit": 50,
@@ -255,7 +263,7 @@ async def test_catalog_admits_every_read_only_tool_for_the_teams_bot(
     requester = next(
         tool for tool in tools if tool["name"] == "list_my_attendance_events"
     )
-    assert len(tools) == 14
+    assert len(tools) == 15
     assert all(
         isinstance(tool["description"], str) and len(tool["description"]) <= 4_096
         for tool in tools
@@ -633,7 +641,7 @@ async def test_catalog_includes_read_only_reporting_tools(app) -> None:
         )
 
     names = {tool["name"] for tool in response.json()["result"]["tools"]}
-    assert len(names) == 14
+    assert len(names) == 15
     assert {
         "get_current_attendance",
         "get_employee_attendance_analysis",
@@ -641,6 +649,103 @@ async def test_catalog_includes_read_only_reporting_tools(app) -> None:
         "get_exceptions",
         "get_organization_attendance_analysis",
     } <= names
+
+
+@pytest.mark.asyncio
+async def test_resolve_employee_requires_exactly_one_selector_and_maps_safe_errors(
+    app, upstream_requests
+) -> None:
+    async with (
+        app.router.lifespan_context(app),
+        httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
+        ) as client,
+    ):
+        await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "test", "version": "1"},
+                },
+            },
+        )
+        await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized",
+                "params": {},
+            },
+        )
+        catalog = await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        )
+        valid = await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {
+                    "name": "resolve_employee",
+                    "arguments": {"username": "ada"},
+                },
+            },
+        )
+        missing = await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "tools/call",
+                "params": {"name": "resolve_employee", "arguments": {}},
+            },
+        )
+        multiple = await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={
+                "jsonrpc": "2.0",
+                "id": 5,
+                "method": "tools/call",
+                "params": {
+                    "name": "resolve_employee",
+                    "arguments": {"employee_id": 42, "username": "ada"},
+                },
+            },
+        )
+
+    tool = {item["name"]: item for item in catalog.json()["result"]["tools"]}[
+        "resolve_employee"
+    ]
+    assert tool["annotations"] == {"readOnlyHint": True}
+    assert set(tool["inputSchema"]["properties"]) == {
+        "employee_id",
+        "username",
+        "email",
+    }
+    assert tool["inputSchema"].get("required", []) == []
+    assert valid.json()["result"].get("isError") is not True
+    assert all(
+        '"code":"INVALID_ARGUMENT"' in response.json()["result"]["content"][0]["text"]
+        for response in (missing, multiple)
+    )
+    assert [request.url.path for request in upstream_requests] == [
+        "/internal/v1/mcp/session-admissions",
+        "/api/v1/employees/resolve",
+    ]
+    assert dict(upstream_requests[1].url.params) == {"username": "ada"}
 
 
 @pytest.mark.asyncio
@@ -786,6 +891,42 @@ async def test_reporting_tools_map_arguments_to_attendance_rest_api(
         request.headers["authorization"] == HEADERS["Authorization"]
         and request.headers["x-correlation-id"] == HEADERS["X-Correlation-ID"]
         for request in requests
+    )
+
+
+@pytest.mark.asyncio
+async def test_current_attendance_schema_excludes_unknown_status(app) -> None:
+    async with (
+        app.router.lifespan_context(app),
+        httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
+        ) as client,
+    ):
+        await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "test", "version": "1"},
+                },
+            },
+        )
+        listed = await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        )
+
+    tool = {item["name"]: item for item in listed.json()["result"]["tools"]}[
+        "get_current_attendance"
+    ]
+    assert (
+        "unknown" not in tool["inputSchema"]["properties"]["status"]["anyOf"][0]["enum"]
     )
 
 

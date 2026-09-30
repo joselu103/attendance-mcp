@@ -6,11 +6,13 @@ from typing import Literal
 
 import httpx
 from fastmcp import Context, FastMCP
+from fastmcp.exceptions import ToolError
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
+from attendance_mcp.contracts import SafeError
 from attendance_mcp.http_lifecycle import MCP_CONTRACT_VERSION, _McpHttpLifecycle
 from attendance_mcp.rest_client import CrmtRestClient
 from attendance_mcp.settings import Settings
@@ -102,6 +104,33 @@ def create_app(
             ctx,
             lambda headers: rest_client.get_employee(
                 headers=headers, employee_id=employee_id
+            ),
+        )
+
+    @mcp.tool(
+        name="resolve_employee",
+        annotations={"readOnlyHint": True},
+        description=(
+            "Resolve one employee's directory-safe metadata by exactly one employee "
+            "ID, username, or email. Authorization remains enforced by the server."
+        ),
+    )
+    @tool_call_policy.instrument
+    async def resolve_employee(
+        employee_id: int | None = None,
+        username: str | None = None,
+        email: str | None = None,
+        ctx: Context | None = None,
+    ) -> dict[str, object]:
+        selectors = _defined_params(
+            employee_id=employee_id, username=username, email=email
+        )
+        if len(selectors) != 1:
+            raise ToolError(SafeError.for_code("INVALID_ARGUMENT").model_dump_json())
+        return await tool_call_policy.call(
+            ctx,
+            lambda headers: rest_client.resolve_employee(
+                headers=headers, params=selectors
             ),
         )
 
@@ -246,7 +275,6 @@ def create_app(
             "break",
             "absence",
             "no_status",
-            "unknown",
         ]
         | None = None,
         limit: int = 50,

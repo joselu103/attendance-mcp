@@ -2,6 +2,30 @@
 
 > **Status:** Completed
 >
+> **Objective:** Add MCP parity for privileged exact employee resolution and
+> user-facing current-attendance status filtering after the verified Attendance
+> REST API v1 handoff.
+>
+> **Contract context:** Add read-only `resolve_employee` over `GET
+> /api/v1/employees/resolve`, requiring exactly one `employee_id`, `username`,
+> or `email`; preserve contract `1.2.0`, header forwarding, safe error mapping,
+> and REST-owned authorization. Remove `unknown` from the
+> `get_current_attendance` status schema.
+>
+> **Verification:** Added REST-client and Streamable HTTP MCP black-box coverage
+> for resolver route/parameters, allowed headers, safe `NOT_FOUND`, selector
+> validation, catalog inventory, and exclusion of `unknown`; verified with
+> `uv run pytest`, `uv run ruff check .`, and `uv run ruff format --check .`.
+>
+> **Definition of done:** Completed locally: the fifteen-tool read-only catalog
+> forwards the resolver only through the established client seam, rejects
+> missing/multiple selectors safely, and exposes only user-facing current
+> attendance statuses.
+
+## Prior Directive
+
+> **Status:** Completed
+>
 > **Objective:** Collapse the MCP HTTP lifecycle behind one private ASGI-facing
 > module.
 >

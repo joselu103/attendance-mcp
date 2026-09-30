@@ -30,15 +30,21 @@ compatible under major version 1.
 
 ## MCP tool inventory
 
-The adapter provides these fourteen read-only MCP tools and maps them to the
+The adapter provides these fifteen read-only MCP tools and maps them to the
 Attendance REST API v1 inventory:
 
 | Area | Tools |
 | --- | --- |
 | Requester attendance | `list_my_attendance_events` |
-| Catalog | `list_employees`, `get_employee`, `list_punch_types`, `list_locations` |
+| Catalog | `list_employees`, `get_employee`, `resolve_employee`, `list_punch_types`, `list_locations` |
 | Administrative attendance | `list_attendance_events`, `get_attendance_event`, `get_daily_attendance`, `get_planned_work` |
 | Reporting | `get_current_attendance`, `get_employee_attendance_analysis`, `get_employee_attendance_summary`, `get_exceptions`, `get_organization_attendance_analysis` |
+
+`resolve_employee` accepts exactly one of `employee_id`, `username`, or `email`
+and returns the REST API's directory-safe employee summary. The REST API remains
+the sole authorization authority. `get_current_attendance` accepts only the
+user-facing `office`, `remote`, `customer_site`, `break`, `absence`, and
+`no_status` filters; `unknown` is not part of the MCP contract.
 
 ## Verification boundary
 

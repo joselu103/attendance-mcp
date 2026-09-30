@@ -5,6 +5,13 @@ MCP-adapter architecture decision as the canonical sources for route behavior.
 Do not invent endpoints, token claims, employee mapping, authorization rules, or
 response fields beyond those contracts.
 
+`resolve_employee` maps exactly one `employee_id`, `username`, or `email` query
+selector to `GET /api/v1/employees/resolve`. The MCP tool rejects missing or
+multiple selectors with the established safe `INVALID_ARGUMENT` envelope and
+does not make local authorization decisions. `get_current_attendance` exposes
+only `office`, `remote`, `customer_site`, `break`, `absence`, and `no_status`;
+`unknown` must not be accepted or advertised.
+
 The adapter preserves existing MCP tool names, argument names, defaults,
 descriptions, and response JSON while mapping each read-only tool to its REST
 v1 route. Keep MCP contract `1.2.0` until parity is proven. Publish `1.3.0` only
