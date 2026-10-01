@@ -1,8 +1,6 @@
 """One private ASGI lifecycle boundary for public Attendance MCP HTTP requests."""
 
-import json
 from time import perf_counter
-from typing import Any
 from uuid import uuid4
 
 import structlog
@@ -13,8 +11,6 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from attendance_mcp.contracts import SafeError
 from attendance_mcp.rest_client import (
     CORRELATION_ID_HEADER,
-    CrmtRestClient,
-    RestFailure,
 )
 from attendance_mcp.tool_policy import (
     HeaderFailure,
@@ -32,14 +28,12 @@ class _McpHttpLifecycle:
     """Apply the HTTP contract before FastMCP handles an MCP request.
 
     Every MCP request receives trace logging and contract-version publication.
-    Initialization requests additionally require admitted headers, a bounded
-    body, and Attendance REST API session admission. Other ASGI traffic passes
-    through unchanged apart from lifecycle logging.
+    MCP requests require admitted headers and a bounded body. Other ASGI traffic
+    passes through unchanged apart from lifecycle logging.
     """
 
-    def __init__(self, app: ASGIApp, rest_client: CrmtRestClient) -> None:
+    def __init__(self, app: ASGIApp) -> None:
         self._app = app
-        self._rest_client = rest_client
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -101,7 +95,7 @@ class _McpHttpLifecycle:
     ) -> None:
         request = Request(scope, receive=receive)
         try:
-            headers = forward_headers(request)
+            forward_headers(request)
         except HeaderFailure as failure:
             outcome.update(
                 result_state="header_rejected",
@@ -128,18 +122,6 @@ class _McpHttpLifecycle:
                 scope, send, SafeError.for_code("INVALID_ARGUMENT"), 400
             )
             return
-        if _is_initialize(body):
-            try:
-                await self._rest_client.admit_session(headers)
-            except RestFailure as failure:
-                outcome.update(
-                    result_state="session_rejected",
-                    crmt_admission="rejected",
-                    safe_error_code=failure.error.code,
-                )
-                await _send_safe_error(scope, send, failure.error, failure.status_code)
-                return
-            outcome["crmt_admission"] = "admitted"
         await self._app(scope, _replay_body(body), send)
 
 
@@ -175,14 +157,6 @@ def _replay_body(body: bytes) -> Receive:
         return {"type": "http.request", "body": body, "more_body": False}
 
     return replay
-
-
-def _is_initialize(body: bytes) -> bool:
-    try:
-        value: Any = json.loads(body)
-    except (TypeError, ValueError):
-        return False
-    return isinstance(value, dict) and value.get("method") == "initialize"
 
 
 async def _send_safe_error(

@@ -417,7 +417,7 @@ def create_app(
         ],
         lifespan=lifespan,
     )
-    app.add_middleware(_McpHttpLifecycle, rest_client=rest_client)
+    app.add_middleware(_McpHttpLifecycle)
     return app
 
 

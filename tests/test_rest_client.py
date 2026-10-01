@@ -13,14 +13,6 @@ HEADERS = {
     ("operation", "method", "path", "route_template", "invoke"),
     [
         pytest.param(
-            "admit_session",
-            "POST",
-            "/internal/v1/mcp/session-admissions",
-            "/internal/v1/mcp/session-admissions",
-            lambda client: client.admit_session(HEADERS),
-            id="session-admission",
-        ),
-        pytest.param(
             "list_my_attendance_events",
             "GET",
             "/api/v1/me/attendance-events",

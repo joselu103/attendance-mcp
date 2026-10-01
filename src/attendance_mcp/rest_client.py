@@ -27,9 +27,6 @@ class _Operation:
         return self.route_template.format(**(route_values or {}))
 
 
-_ADMIT_SESSION = _Operation(
-    "admit_session", "POST", "/internal/v1/mcp/session-admissions"
-)
 _LIST_MY_ATTENDANCE_EVENTS = _Operation(
     "list_my_attendance_events", "GET", "/api/v1/me/attendance-events"
 )
@@ -94,10 +91,6 @@ class CrmtRestClient:
 
     def __init__(self, *, client: httpx.AsyncClient) -> None:
         self._client = client
-
-    async def admit_session(self, headers: Mapping[str, str]) -> None:
-        """Ask the Attendance REST API to admit an MCP initialization request."""
-        await self._request(_ADMIT_SESSION, headers=headers)
 
     async def list_my_attendance_events(
         self, *, headers: Mapping[str, str], params: Mapping[str, object]
