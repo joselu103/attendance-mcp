@@ -2,6 +2,29 @@
 
 > **Status:** Completed
 >
+> **Objective:** Remove the obsolete Attendance REST API session-admission
+> operation and all initialization-time coupling from Attendance MCP.
+>
+> **Contract context:** Preserve public Streamable HTTP `POST /mcp` contract
+> `1.2.0`, all fifteen read-only tools, names, schemas, defaults, malformed and
+> duplicate-header rejection, public `GET /health`, allowed header forwarding,
+> and REST-safe-error mapping. Attendance REST API v1 `1.0.0` is MCP-free, so
+> initialization remains local protocol handling and only protected tool routes
+> call REST.
+>
+> **Verification:** Fixture-backed black-box MCP tests demonstrate successful
+> initialization with no upstream REST request; all fifteen route mappings,
+> allowed headers, and safe errors remain covered. Verified with `uv run pytest`
+> (43 passed), `uv run ruff check .`, and `uv run ruff format --check .`.
+>
+> **Definition of done:** Completed locally after final verification: no adapter
+> source or migration contract invokes session admission, while the
+> established MCP and REST seams remain behaviorally compatible.
+
+## Prior Directive
+
+> **Status:** Completed
+>
 > **Objective:** Add MCP parity for privileged exact employee resolution and
 > user-facing current-attendance status filtering after the verified Attendance
 > REST API v1 handoff.

@@ -20,10 +20,6 @@ def upstream_requests() -> list[httpx.Request]:
 def app(upstream_requests: list[httpx.Request]):
     async def handler(request: httpx.Request) -> httpx.Response:
         upstream_requests.append(request)
-        if request.url.path == "/internal/v1/mcp/session-admissions":
-            return httpx.Response(
-                204, headers={"X-Attendance-API-Contract-Version": "1.0.0"}
-            )
         catalog_payloads: dict[str, object] = {
             "/api/v1/employees/resolve": {
                 "employee_id": 42,
@@ -83,7 +79,7 @@ async def test_health_is_public_and_does_not_touch_crmt(app, upstream_requests) 
 
 
 @pytest.mark.asyncio
-async def test_mcp_initialize_admits_session_and_tool_call_maps_to_crmt(
+async def test_mcp_initialize_without_upstream_call_and_tool_call_maps_to_crmt(
     app, upstream_requests
 ) -> None:
     async with (
@@ -142,12 +138,11 @@ async def test_mcp_initialize_admits_session_and_tool_call_maps_to_crmt(
         "next_offset": None,
     }
     assert [request.url.path for request in upstream_requests] == [
-        "/internal/v1/mcp/session-admissions",
-        "/api/v1/me/attendance-events",
+        "/api/v1/me/attendance-events"
     ]
-    assert upstream_requests[1].headers["authorization"] == HEADERS["Authorization"]
+    assert upstream_requests[0].headers["authorization"] == HEADERS["Authorization"]
     assert (
-        upstream_requests[1].headers["x-correlation-id"] == HEADERS["X-Correlation-ID"]
+        upstream_requests[0].headers["x-correlation-id"] == HEADERS["X-Correlation-ID"]
     )
 
 
@@ -280,7 +275,7 @@ async def test_catalog_admits_every_read_only_tool_for_the_teams_bot(
 
 
 @pytest.mark.asyncio
-async def test_request_lifecycle_records_only_safe_admission_outcomes(
+async def test_request_lifecycle_records_only_safe_header_outcomes(
     monkeypatch,
 ) -> None:
     events: list[tuple[str, str, dict[str, object]]] = []
@@ -298,24 +293,11 @@ async def test_request_lifecycle_records_only_safe_admission_outcomes(
         def exception(self, event: str, **values: object) -> None:
             events.append(("exception", event, values))
 
-    async def handler(request: httpx.Request) -> httpx.Response:
-        if (
-            request.headers["x-correlation-id"]
-            == "22222222-2222-2222-2222-222222222222"
-        ):
-            return httpx.Response(
-                403,
-                json={
-                    "code": "FORBIDDEN",
-                    "message": "You do not have permission to do that.",
-                },
-                headers={"X-Attendance-API-Contract-Version": "1.0.0"},
-            )
-        return httpx.Response(
-            204, headers={"X-Attendance-API-Contract-Version": "1.0.0"}
-        )
-
     monkeypatch.setattr("attendance_mcp.http_lifecycle.logger", CapturingLogger())
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        raise AssertionError("initialize must not call the Attendance REST API")
+
     initialize = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -340,17 +322,8 @@ async def test_request_lifecycle_records_only_safe_admission_outcomes(
         ):
             await client.post("/mcp", json=initialize)
             admitted = await client.post("/mcp", headers=HEADERS, json=initialize)
-            rejected = await client.post(
-                "/mcp",
-                headers={
-                    **HEADERS,
-                    "X-Correlation-ID": "22222222-2222-2222-2222-222222222222",
-                },
-                json=initialize,
-            )
 
     assert admitted.status_code == 200
-    assert rejected.status_code == 403
     outcomes = [
         values for _, event, values in events if event != "http_request_received"
     ]
@@ -371,26 +344,14 @@ async def test_request_lifecycle_records_only_safe_admission_outcomes(
         "status_code": 200,
         "result_state": "completed",
         "header_admission": "accepted",
-        "crmt_admission": "admitted",
         "duration_ms": outcomes[1]["duration_ms"],
         "trace_id": HEADERS["X-Correlation-ID"],
-    }
-    assert outcomes[2] | {"duration_ms": outcomes[2]["duration_ms"]} == {
-        "route": "/mcp",
-        "status_code": 403,
-        "result_state": "session_rejected",
-        "header_admission": "accepted",
-        "crmt_admission": "rejected",
-        "safe_error_code": "FORBIDDEN",
-        "duration_ms": outcomes[2]["duration_ms"],
-        "trace_id": "22222222-2222-2222-2222-222222222222",
     }
     assert [
         level for level, event, _ in events if event != "http_request_received"
     ] == [
         "warning",
         "info",
-        "warning",
     ]
 
 
@@ -497,7 +458,7 @@ async def test_administrative_tools_map_arguments_to_attendance_rest_api(
         response.json()["result"]["structuredContent"]["items"] == []
         for response in responses
     )
-    requests = upstream_requests[1:]
+    requests = upstream_requests
     assert [(request.url.path, dict(request.url.params)) for request in requests] == [
         (
             "/api/v1/employees/42/attendance-events",
@@ -602,14 +563,13 @@ async def test_catalog_tools_preserve_names_defaults_and_rest_mappings(
         response.json()["result"].get("isError") is not True for response in responses
     )
     assert [request.url.path for request in upstream_requests] == [
-        "/internal/v1/mcp/session-admissions",
         "/api/v1/employees",
         "/api/v1/employees/42",
         "/api/v1/punch-types",
         "/api/v1/locations",
     ]
-    assert dict(upstream_requests[1].url.params) == {"limit": "50", "offset": "0"}
-    assert dict(upstream_requests[3].url.params) == {"active_only": "false"}
+    assert dict(upstream_requests[0].url.params) == {"limit": "50", "offset": "0"}
+    assert dict(upstream_requests[2].url.params) == {"active_only": "false"}
 
 
 @pytest.mark.asyncio
@@ -742,10 +702,9 @@ async def test_resolve_employee_requires_exactly_one_selector_and_maps_safe_erro
         for response in (missing, multiple)
     )
     assert [request.url.path for request in upstream_requests] == [
-        "/internal/v1/mcp/session-admissions",
         "/api/v1/employees/resolve",
     ]
-    assert dict(upstream_requests[1].url.params) == {"username": "ada"}
+    assert dict(upstream_requests[0].url.params) == {"username": "ada"}
 
 
 @pytest.mark.asyncio
@@ -844,7 +803,7 @@ async def test_reporting_tools_map_arguments_to_attendance_rest_api(
     assert all(
         response.json()["result"].get("isError") is not True for response in responses
     )
-    requests = upstream_requests[1:]
+    requests = upstream_requests
     assert [
         (request.url.path, list(request.url.params.multi_items()))
         for request in requests

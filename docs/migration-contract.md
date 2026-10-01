@@ -18,9 +18,8 @@ decisions, persist audit records, or access SQL Server.
 For every protected MCP request, callers provide exactly one delegated
 `Authorization: Bearer <token>` and exactly one UUID `X-Correlation-ID`.
 Attendance MCP forwards those two headers unchanged to the Attendance REST API and forwards no
-other caller-controlled headers. It uses the Attendance REST API's private session-admission
-operation before MCP initialization; that operation never returns principal or
-credential data.
+other caller-controlled headers. MCP initialization remains local protocol handling;
+protected tool routes are the only adapter-to-REST requests.
 
 Attendance REST API v1 is the canonical route and safe-error contract. The adapter maps
 only the Attendance REST API's validated `{ "code", "message" }` safe envelope into MCP tool

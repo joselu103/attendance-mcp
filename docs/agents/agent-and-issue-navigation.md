@@ -24,9 +24,7 @@ then follow the REST/MCP contracts they name:
 3. [REST/MCP migration guidance](https://github.com/joselu103/attendance-crmt/blob/main/docs/agent-guidance/rest-migration.md).
 4. [Teams-to-CRMT MCP contract](https://github.com/joselu103/attendance-crmt/blob/main/docs/integrations/teams-bot-mcp-auth-contract.md).
 5. The published REST adapter contract in
-   [attendance-crmt#17](https://github.com/joselu103/attendance-crmt/issues/17)
-   and the session-admission contract in
-   [attendance-crmt#18](https://github.com/joselu103/attendance-crmt/issues/18).
+   [attendance-crmt#17](https://github.com/joselu103/attendance-crmt/issues/17).
 
 Do not discover adapter scope by searching the Attendance REST API implementation.
 Use the contract and this fixed MCP tool inventory instead:
