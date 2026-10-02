@@ -4,7 +4,7 @@
 
 Attendance MCP owns the public Streamable HTTP `POST /mcp` endpoint. It is a
 stateless, read-only protocol adapter and publishes MCP contract version
-`1.2.0`. `GET /health` is public liveness only; it does not establish readiness
+`1.3.0`. `GET /health` is public liveness only; it does not establish readiness
 of the Attendance REST API, identity, audit, database, or MCP services.
 
 The Attendance REST API is the private authority behind the adapter. It validates
@@ -43,7 +43,10 @@ Attendance REST API v1 inventory:
 and returns the REST API's directory-safe employee summary. The REST API remains
 the sole authorization authority. `get_current_attendance` accepts only the
 user-facing `office`, `remote`, `customer_site`, `break`, `absence`, and
-`no_status` filters; `unknown` is not part of the MCP contract.
+`no_status` values through an optional `statuses` array; omitted `statuses`
+requests all recognized statuses. The adapter forwards an array as repeated REST
+`status` query keys, and rejects empty or duplicate arrays. `unknown` is not
+part of the MCP contract.
 
 ## Verification boundary
 

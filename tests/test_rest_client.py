@@ -434,7 +434,8 @@ async def test_reporting_routes_preserve_arguments_and_safe_failures() -> None:
     ) as http_client:
         client = CrmtRestClient(client=http_client)
         await client.get_current_attendance(
-            headers=headers, params={"status": "remote", "limit": 25, "offset": 2}
+            headers=headers,
+            params={"status": ["office", "remote"], "limit": 25, "offset": 2},
         )
         await client.get_employee_attendance_analysis(
             employee_id=42,
@@ -464,8 +465,9 @@ async def test_reporting_routes_preserve_arguments_and_safe_failures() -> None:
         "/api/v1/attendance/exceptions",
         "/api/v1/attendance/organization-analysis",
     ]
-    assert dict(received[0].url.params) == {
-        "status": "remote",
-        "limit": "25",
-        "offset": "2",
-    }
+    assert list(received[0].url.params.multi_items()) == [
+        ("status", "office"),
+        ("status", "remote"),
+        ("limit", "25"),
+        ("offset", "2"),
+    ]

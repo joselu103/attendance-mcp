@@ -130,7 +130,7 @@ async def test_mcp_initialize_without_upstream_call_and_tool_call_maps_to_crmt(
         )
 
     assert initialized.status_code == 200
-    assert initialized.headers["X-Attendance-MCP-Contract-Version"] == "1.2.0"
+    assert initialized.headers["X-Attendance-MCP-Contract-Version"] == "1.3.0"
     assert response.json()["result"]["structuredContent"] == {
         "items": [],
         "limit": 50,
@@ -166,10 +166,10 @@ async def test_mcp_rejects_missing_or_malformed_forwarded_headers(app) -> None:
 
     assert missing.status_code == 401
     assert missing.json()["code"] == "AUTHENTICATION_REQUIRED"
-    assert missing.headers["X-Attendance-MCP-Contract-Version"] == "1.2.0"
+    assert missing.headers["X-Attendance-MCP-Contract-Version"] == "1.3.0"
     assert malformed.status_code == 400
     assert malformed.json()["code"] == "CORRELATION_ID_INVALID"
-    assert malformed.headers["X-Attendance-MCP-Contract-Version"] == "1.2.0"
+    assert malformed.headers["X-Attendance-MCP-Contract-Version"] == "1.3.0"
 
 
 @pytest.mark.asyncio
@@ -212,10 +212,10 @@ async def test_mcp_rejects_duplicate_correlation_and_oversized_bodies_safely(
 
     assert duplicate.status_code == 400
     assert duplicate.json()["code"] == "CORRELATION_ID_INVALID"
-    assert duplicate.headers["X-Attendance-MCP-Contract-Version"] == "1.2.0"
+    assert duplicate.headers["X-Attendance-MCP-Contract-Version"] == "1.3.0"
     assert oversized.status_code == 400
     assert oversized.json()["code"] == "INVALID_ARGUMENT"
-    assert oversized.headers["X-Attendance-MCP-Contract-Version"] == "1.2.0"
+    assert oversized.headers["X-Attendance-MCP-Contract-Version"] == "1.3.0"
     assert upstream_requests == []
     received = [
         values for _, event, values in events if event == "http_request_received"
@@ -453,7 +453,7 @@ async def test_administrative_tools_map_arguments_to_attendance_rest_api(
             ("get_planned_work", "end_date"),
         )
     )
-    assert catalog.headers["X-Attendance-MCP-Contract-Version"] == "1.2.0"
+    assert catalog.headers["X-Attendance-MCP-Contract-Version"] == "1.3.0"
     assert all(
         response.json()["result"]["structuredContent"]["items"] == []
         for response in responses
@@ -745,7 +745,7 @@ async def test_reporting_tools_map_arguments_to_attendance_rest_api(
                 "get_current_attendance",
                 {
                     "as_of": "2026-08-10T08:30:00",
-                    "status": "office",
+                    "statuses": ["office", "remote"],
                     "limit": 20,
                     "offset": 3,
                 },
@@ -813,6 +813,7 @@ async def test_reporting_tools_map_arguments_to_attendance_rest_api(
             [
                 ("as_of", "2026-08-10T08:30:00"),
                 ("status", "office"),
+                ("status", "remote"),
                 ("limit", "20"),
                 ("offset", "3"),
             ],
@@ -854,7 +855,9 @@ async def test_reporting_tools_map_arguments_to_attendance_rest_api(
 
 
 @pytest.mark.asyncio
-async def test_current_attendance_schema_excludes_unknown_status(app) -> None:
+async def test_current_attendance_schema_uses_statuses_and_excludes_unknown(
+    app,
+) -> None:
     async with (
         app.router.lifespan_context(app),
         httpx.AsyncClient(
@@ -884,9 +887,59 @@ async def test_current_attendance_schema_excludes_unknown_status(app) -> None:
     tool = {item["name"]: item for item in listed.json()["result"]["tools"]}[
         "get_current_attendance"
     ]
+    schema = tool["inputSchema"]
+    assert "status" not in schema["properties"]
     assert (
-        "unknown" not in tool["inputSchema"]["properties"]["status"]["anyOf"][0]["enum"]
+        "unknown" not in schema["properties"]["statuses"]["anyOf"][0]["items"]["enum"]
     )
+
+
+@pytest.mark.asyncio
+async def test_current_attendance_rejects_empty_and_duplicate_statuses(
+    app, upstream_requests
+) -> None:
+    async with (
+        app.router.lifespan_context(app),
+        httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
+        ) as client,
+    ):
+        await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "test", "version": "1"},
+                },
+            },
+        )
+        responses = [
+            await client.post(
+                "/mcp",
+                headers=HEADERS,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": identifier,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "get_current_attendance",
+                        "arguments": {"statuses": statuses},
+                    },
+                },
+            )
+            for identifier, statuses in ((2, []), (3, ["office", "office"]))
+        ]
+
+    assert all(
+        '"code":"INVALID_ARGUMENT"' in response.json()["result"]["content"][0]["text"]
+        for response in responses
+    )
+    assert upstream_requests == []
 
 
 @pytest.mark.asyncio
