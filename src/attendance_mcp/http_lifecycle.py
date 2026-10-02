@@ -18,7 +18,7 @@ from attendance_mcp.tool_policy import (
     forward_headers,
 )
 
-MCP_CONTRACT_VERSION = "1.2.0"
+MCP_CONTRACT_VERSION = "1.3.0"
 MCP_CONTRACT_VERSION_HEADER = "X-Attendance-MCP-Contract-Version"
 _MAX_MCP_BODY_BYTES = 65_536
 logger = structlog.get_logger(__name__)

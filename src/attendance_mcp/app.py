@@ -268,26 +268,32 @@ def create_app(
     @tool_call_policy.instrument
     async def get_current_attendance(
         as_of: datetime | None = None,
-        status: Literal[
-            "office",
-            "remote",
-            "customer_site",
-            "break",
-            "absence",
-            "no_status",
+        statuses: list[
+            Literal[
+                "office",
+                "remote",
+                "customer_site",
+                "break",
+                "absence",
+                "no_status",
+            ]
         ]
         | None = None,
         limit: int = 50,
         offset: int = 0,
         ctx: Context | None = None,
     ) -> dict[str, object]:
+        if statuses is not None and (
+            not statuses or len(set(statuses)) != len(statuses)
+        ):
+            raise ToolError(SafeError.for_code("INVALID_ARGUMENT").model_dump_json())
         return await tool_call_policy.call(
             ctx,
             lambda headers: rest_client.get_current_attendance(
                 headers=headers,
                 params=_defined_params(
                     as_of=as_of.isoformat() if as_of else None,
-                    status=status,
+                    status=statuses,
                     limit=limit,
                     offset=offset,
                 ),

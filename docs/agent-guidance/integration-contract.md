@@ -10,11 +10,14 @@ selector to `GET /api/v1/employees/resolve`. The MCP tool rejects missing or
 multiple selectors with the established safe `INVALID_ARGUMENT` envelope and
 does not make local authorization decisions. `get_current_attendance` exposes
 only `office`, `remote`, `customer_site`, `break`, `absence`, and `no_status`;
-`unknown` must not be accepted or advertised.
+`unknown` must not be accepted or advertised. Its optional `statuses` array
+selects a union and is forwarded as repeated REST `status` query keys; omitted
+means all recognized statuses, while empty and duplicate arrays are invalid.
 
-The adapter preserves existing MCP tool names, argument names, defaults,
-descriptions, and response JSON while mapping each read-only tool to its REST
-v1 route. Keep MCP contract `1.2.0` until parity is proven. Publish `1.3.0` only
+The adapter preserves existing MCP tool names, defaults, descriptions, and
+response JSON while mapping each read-only tool to its REST v1 route. The
+current-attendance scalar `status` argument is replaced by `statuses` in MCP
+contract `1.3.0`; the Teams bot is its only consumer. Publish that version only
 after its documented read-only annotations, compatible `NOT_FOUND` behavior, and
 black-box tests pass.
 
