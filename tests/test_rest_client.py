@@ -111,6 +111,14 @@ HEADERS = {
             id="current-attendance",
         ),
         pytest.param(
+            "get_current_work_status",
+            "GET",
+            "/api/v1/attendance/current-status",
+            "/api/v1/attendance/current-status",
+            lambda client: client.get_current_work_status(headers=HEADERS, params={}),
+            id="current-work-status",
+        ),
+        pytest.param(
             "get_employee_attendance_analysis",
             "GET",
             "/api/v1/employees/42/attendance-analysis",

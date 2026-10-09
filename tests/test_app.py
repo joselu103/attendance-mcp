@@ -258,7 +258,7 @@ async def test_catalog_admits_every_read_only_tool_for_the_teams_bot(
     requester = next(
         tool for tool in tools if tool["name"] == "list_my_attendance_events"
     )
-    assert len(tools) == 15
+    assert len(tools) == 16
     assert all(
         isinstance(tool["description"], str) and len(tool["description"]) <= 4_096
         for tool in tools
@@ -601,8 +601,9 @@ async def test_catalog_includes_read_only_reporting_tools(app) -> None:
         )
 
     names = {tool["name"] for tool in response.json()["result"]["tools"]}
-    assert len(names) == 15
+    assert len(names) == 16
     assert {
+        "get_current_work_status",
         "get_current_attendance",
         "get_employee_attendance_analysis",
         "get_employee_attendance_summary",
@@ -742,6 +743,10 @@ async def test_reporting_tools_map_arguments_to_attendance_rest_api(
         )
         calls = [
             (
+                "get_current_work_status",
+                {"statuses": ["office", "remote"], "limit": 20, "offset": 3},
+            ),
+            (
                 "get_current_attendance",
                 {
                     "as_of": "2026-08-10T08:30:00",
@@ -809,6 +814,15 @@ async def test_reporting_tools_map_arguments_to_attendance_rest_api(
         for request in requests
     ] == [
         (
+            "/api/v1/attendance/current-status",
+            [
+                ("status", "office"),
+                ("status", "remote"),
+                ("limit", "20"),
+                ("offset", "3"),
+            ],
+        ),
+        (
             "/api/v1/attendance/current",
             [
                 ("as_of", "2026-08-10T08:30:00"),
@@ -851,6 +865,129 @@ async def test_reporting_tools_map_arguments_to_attendance_rest_api(
         request.headers["authorization"] == HEADERS["Authorization"]
         and request.headers["x-correlation-id"] == HEADERS["X-Correlation-ID"]
         for request in requests
+    )
+
+
+@pytest.mark.asyncio
+async def test_current_work_status_catalog_and_invalid_filters(
+    app, upstream_requests
+) -> None:
+    async with (
+        app.router.lifespan_context(app),
+        httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
+        ) as client,
+    ):
+        listed = await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+        )
+        responses = [
+            await client.post(
+                "/mcp",
+                headers=HEADERS,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": identifier,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "get_current_work_status",
+                        "arguments": {"statuses": statuses},
+                    },
+                },
+            )
+            for identifier, statuses in (
+                (2, []),
+                (3, ["office", "office"]),
+                (4, ["unknown"]),
+            )
+        ]
+
+    tools = {tool["name"]: tool for tool in listed.json()["result"]["tools"]}
+    pilot_tool = tools["get_current_work_status"]
+    assert pilot_tool["annotations"] == {"readOnlyHint": True}
+    assert set(pilot_tool["inputSchema"]["properties"]) == {
+        "statuses",
+        "limit",
+        "offset",
+    }
+    assert pilot_tool["inputSchema"].get("required") is None
+    assert "unknown" not in str(pilot_tool["inputSchema"])
+    assert "administrator" in tools["get_current_attendance"]["description"].lower()
+    assert all(response.json()["result"]["isError"] for response in responses)
+    assert upstream_requests == []
+
+
+@pytest.mark.asyncio
+async def test_current_work_status_forwards_only_allowed_headers_and_legacy_forbidden() -> (
+    None
+):
+    received: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        received.append(request)
+        if request.url.path == "/api/v1/attendance/current":
+            return httpx.Response(
+                403,
+                json={
+                    "code": "FORBIDDEN",
+                    "message": "You do not have permission to do that.",
+                },
+                headers={"X-Attendance-API-Contract-Version": "1.0.0"},
+            )
+        return httpx.Response(
+            200,
+            json={"items": [], "limit": 50, "offset": 0, "next_offset": None},
+            headers={"X-Attendance-API-Contract-Version": "1.0.0"},
+        )
+
+    async with httpx.AsyncClient(
+        base_url="https://crmt.example", transport=httpx.MockTransport(handler)
+    ) as rest_http:
+        app = create_app(
+            Settings(crmt_base_url="https://crmt.example"), client=rest_http
+        )
+        async with (
+            app.router.lifespan_context(app),
+            httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app),
+                base_url="https://mcp.example",
+            ) as client,
+        ):
+            responses = [
+                await client.post(
+                    "/mcp",
+                    headers=HEADERS | {"X-Unapproved": "discard-me"},
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": identifier,
+                        "method": "tools/call",
+                        "params": {"name": name, "arguments": {}},
+                    },
+                )
+                for identifier, name in (
+                    (1, "get_current_work_status"),
+                    (2, "get_current_attendance"),
+                )
+            ]
+
+    assert responses[0].json()["result"]["structuredContent"] == {
+        "items": [],
+        "limit": 50,
+        "offset": 0,
+        "next_offset": None,
+    }
+    assert '"code":"FORBIDDEN"' in responses[1].json()["result"]["content"][0]["text"]
+    assert [request.url.path for request in received] == [
+        "/api/v1/attendance/current-status",
+        "/api/v1/attendance/current",
+    ]
+    assert all(
+        request.headers["authorization"] == HEADERS["Authorization"]
+        and request.headers["x-correlation-id"] == HEADERS["X-Correlation-ID"]
+        and "x-unapproved" not in request.headers
+        for request in received
     )
 
 
