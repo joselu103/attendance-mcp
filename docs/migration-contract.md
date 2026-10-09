@@ -69,6 +69,40 @@ though its name and input shape remain. The pre-release MCP version label stays
 `1.3.0` as directed; this source change does not represent a released contract
 version or an assurance of old client behavior.
 
+## Attendance history compatibility and Teams handoff
+
+`list_my_attendance_events` maps to `GET /api/v1/me/attendance-events`;
+`list_attendance_events(employee_id, ...)` maps to
+`GET /api/v1/employees/{employee_id}/attendance-events`. Both require explicit
+inclusive Europe/Ljubljana `start_date` and `end_date` with no maximum span.
+Future end dates are allowed and REST returns only existing matching records.
+REST rejects reversed dates. Personal identity is server-derived; the employee
+route remains administrator-only. MCP performs no range splitting, date-span
+business validation, authorization decision, or automatic page aggregation.
+
+Each call forwards the original complete dates and one `limit`/`offset` pair
+once. Default limit is 50, supported limits are 1–100, and offset defaults to 0
+and must be nonnegative. REST's `items`, `limit`, `offset`, and `next_offset`
+envelope is unchanged; follow a non-null `next_offset` with the same dates and
+target. Final and empty pages have null `next_offset`. Ordering and lookahead
+remain REST-owned. Pages read live data and do not promise a snapshot.
+
+Accepting wider history periods is additive under pre-release MCP `1.3.0` and
+REST `1.0.0`. Tool names, input schemas, required dates, defaults, routes, safe
+errors, headers, and response fields remain compatible. Only the two history
+descriptions change; summary, analysis, exceptions, planned-work, and
+current-status policies are unaffected.
+
+The verified upstream source is the REST owner history-pagination worktree
+(42 focused and 168 full tests under Python 3.14.2). The MCP source handoff
+permits Teams implementation against those unchanged interfaces: request one
+complete-period page, retain dates and the resolved administrator target for
+continuation, and use the requester tool without an employee selector for
+personal history. Teams owns signed button continuation and must remove its
+history span/page caps and window aggregation. Teams verification remains
+pending; source readiness clears no deployment, Entra/OBO, audit persistence,
+SQL Server, provider/privacy, signing-key provisioning, or real-account gate.
+
 ## Verification boundary
 
 This repository's black-box suite verifies the adapter catalog, REST mappings,

@@ -1,3 +1,33 @@
+# Directive: ATTENDANCE-HISTORY-PAGINATION-001
+
+> **Status:** Completed repository-owned MCP slice; Teams source ready.
+>
+> **Objective:** Advertise and verify complete-period history paging after the
+> verified REST history-pagination source handoff (42 focused, 168 full tests).
+>
+> **Contract:** Required inclusive Europe/Ljubljana start/end dates have no
+> maximum span; future ends are allowed. Preserve pre-release MCP `1.3.0`,
+> REST `1.0.0`, tool schemas/defaults, one complete-period REST call per page,
+> delegated bearer/UUID forwarding, REST authorization and safe errors.
+>
+> **Verification:** Ten new official SDK Streamable HTTP/HTTPX regressions
+> passed against existing handlers before production edits; no forwarding change
+> or artificial RED was needed. Two obsolete prose-equality assertions were
+> removed after they failed on the new descriptions. Python 3.14.2 final gates:
+> focused history/app/REST-client tests 48 passed; full pytest 57 passed; Ruff
+> check and format check (24 files), state JSON validation and diff check passed.
+>
+> **Definition of done:** Two descriptions and README/migration contract updated;
+> schemas, defaults, thin mapping, headers, safe errors and envelopes preserved.
+> Teams has now completed full-period single-page calls and signed continuation
+> against the verified REST/MCP worktrees (247 tests,71 signer/SDK cases and
+> required checks passed). Deployment, Entra/OBO, SQL Server, audit persistence,
+> provider/privacy, signing-key provisioning and real-account evidence remain
+> separate gates. No env/secrets/data/external changes, commits, pushes, PRs,
+> merges or subagents. Branch: `joselu103/history-pagination`, base `ae324f4`.
+
+## Historical completed directive
+
 # Current Directive
 
 > **Status:** Completed locally; downstream and external gates remain.
