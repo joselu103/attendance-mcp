@@ -50,6 +50,9 @@ _GET_PLANNED_WORK = _Operation(
 _GET_CURRENT_ATTENDANCE = _Operation(
     "get_current_attendance", "GET", "/api/v1/attendance/current"
 )
+_GET_CURRENT_WORK_STATUS = _Operation(
+    "get_current_work_status", "GET", "/api/v1/attendance/current-status"
+)
 _GET_EMPLOYEE_ATTENDANCE_ANALYSIS = _Operation(
     "get_employee_attendance_analysis",
     "GET",
@@ -230,6 +233,13 @@ class CrmtRestClient:
     ) -> dict[str, object]:
         return await self._get_object(
             _GET_CURRENT_ATTENDANCE, headers=headers, params=params
+        )
+
+    async def get_current_work_status(
+        self, *, headers: Mapping[str, str], params: Mapping[str, object]
+    ) -> dict[str, object]:
+        return await self._get_object(
+            _GET_CURRENT_WORK_STATUS, headers=headers, params=params
         )
 
     async def get_employee_attendance_analysis(

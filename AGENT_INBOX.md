@@ -1,5 +1,29 @@
 # Current Directive
 
+> **Status:** Completed locally; downstream and external gates remain.
+>
+> **Objective:** Add the read-only pilot workforce-status mapping after the
+> verified Attendance REST API source handoff, and retain the detailed current
+> attendance mapping as an administrator-only compatibility path.
+>
+> **Contract context:** Map `get_current_work_status(statuses=None, limit=50,
+> offset=0)` to `GET /api/v1/attendance/current-status` without client `as_of` or
+> identity selectors. Keep the pre-release MCP version label `1.3.0` and REST v1
+> `1.0.0`, publish the changed catalog and mandatory non-admin client migration,
+> and preserve delegated bearer/UUID correlation forwarding and safe errors.
+>
+> **Verification:** Focused Streamable HTTP and REST-client tests (19 passed),
+> `uv run pytest -q` (47 passed), `uv run ruff check .`,
+> `uv run ruff format --check .` (23 files formatted), `git diff --check`, and
+> JSON state validation passed under Python 3.14.2.
+>
+> **Definition of done:** Sixteen read-only tools include the new category-only
+> route and an explicitly administrator-only detailed tool; route arguments,
+> headers, validation, and safe failures are locally verified. Teams migration
+> and cross-service activation remain separate gates.
+
+## Prior Directive
+
 > **Status:** Completed
 >
 > **Objective:** Remove the obsolete Attendance REST API session-admission
@@ -82,7 +106,9 @@ done, and evidence-backed `AGENT_STATE.json` update.
 
 - The repository implements a thin Streamable HTTP MCP adapter over the
   Attendance REST API v1.
-- Preserve MCP contract `1.2.0` until black-box REST parity is proven.
+- Keep the pre-release MCP contract label `1.3.0` until an actual release or a
+  separately approved versioning decision; document catalog and compatibility
+  changes explicitly.
 - The adapter must forward the delegated Attendance bearer token and the same
   UUID `X-Correlation-ID` unchanged; it must not parse, validate, cache, store,
   or log that token.

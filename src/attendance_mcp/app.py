@@ -258,10 +258,49 @@ def create_app(
         )
 
     @mcp.tool(
+        name="get_current_work_status",
+        description=(
+            "List today's current workforce status categories at server-derived "
+            "Europe/Ljubljana time for any mapped delegated employee. Results contain "
+            "only first_name, last_name, status, and pagination; no event details."
+        ),
+        annotations={"readOnlyHint": True},
+    )
+    @tool_call_policy.instrument
+    async def get_current_work_status(
+        statuses: list[
+            Literal[
+                "office",
+                "remote",
+                "customer_site",
+                "break",
+                "absence",
+                "no_status",
+            ]
+        ]
+        | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        ctx: Context | None = None,
+    ) -> dict[str, object]:
+        if statuses is not None and (
+            not statuses or len(set(statuses)) != len(statuses)
+        ):
+            raise ToolError(SafeError.for_code("INVALID_ARGUMENT").model_dump_json())
+        return await tool_call_policy.call(
+            ctx,
+            lambda headers: rest_client.get_current_work_status(
+                headers=headers,
+                params=_defined_params(status=statuses, limit=limit, offset=offset),
+            ),
+        )
+
+    @mcp.tool(
         name="get_current_attendance",
         description=(
-            "List current attendance states as of an optional timestamp with bounded "
-            "pagination."
+            "Administrator-only detailed current attendance states as of an "
+            "optional timestamp with bounded pagination. Other employees should "
+            "use get_current_work_status."
         ),
         annotations={"readOnlyHint": True},
     )

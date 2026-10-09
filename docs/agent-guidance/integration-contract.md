@@ -14,12 +14,24 @@ only `office`, `remote`, `customer_site`, `break`, `absence`, and `no_status`;
 selects a union and is forwarded as repeated REST `status` query keys; omitted
 means all recognized statuses, while empty and duplicate arrays are invalid.
 
+For the pilot workforce view, `get_current_work_status` maps to
+`GET /api/v1/attendance/current-status` and accepts only optional `statuses`
+(the same six recognized values), `limit=50`, and `offset=0`. It has no `as_of`
+or identity selector. The REST API samples current Europe/Ljubljana time,
+authorizes any mapped delegated employee, and returns only paginated
+`first_name`, `last_name`, and `status` rows. Omitted statuses request all
+recognized categories; a supplied nonempty, unique array forwards as repeated
+REST `status` keys. REST owns bounds and business rules. The old
+`get_current_attendance` maps unchanged to the detailed REST route but is now
+administrator-only; ordinary employee clients must migrate to
+`get_current_work_status` and must not rely on the old tool's former access.
+
 The adapter preserves existing MCP tool names, defaults, descriptions, and
 response JSON while mapping each read-only tool to its REST v1 route. The
-current-attendance scalar `status` argument is replaced by `statuses` in MCP
-contract `1.3.0`; the Teams bot is its only consumer. Publish that version only
-after its documented read-only annotations, compatible `NOT_FOUND` behavior, and
-black-box tests pass.
+current-attendance scalar `status` argument was replaced by `statuses` in MCP
+contract `1.3.0`. The pilot adds the read-only workforce tool while keeping the
+pre-release contract label `1.3.0` until an actual release. This does not promise
+authorization compatibility for non-administrative callers of the detailed tool.
 
 For every protected REST request, forward exactly one delegated `Authorization`
 bearing the Attendance token and exactly one UUID `X-Correlation-ID`. Forward no

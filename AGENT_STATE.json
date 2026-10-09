@@ -16,6 +16,7 @@
       "get_daily_attendance(employee_id, day)",
       "get_planned_work(employee_id, start_date, end_date)",
       "get_current_attendance(as_of=None, statuses=None, limit=50, offset=0)",
+      "get_current_work_status(statuses=None, limit=50, offset=0)",
       "get_employee_attendance_analysis(employee_id, start_date, end_date)",
       "get_employee_attendance_summary(employee_id, start_date, end_date)",
       "get_exceptions(start_date, end_date, employee_ids=None, limit=50, offset=0)",
@@ -25,22 +26,24 @@
   },
   "dependencies_needed": {
     "attendance_crmt": [
-      "A locally verifiable Attendance REST API v1 implementation and its versioned contract for adapter parity testing"
+      "Verified Attendance REST API v1/1.0.0 pilot current-status route and administrator-only detailed route in attendance-crmt/pilot-source-rest; integration parity and real-account authorization remain to be proven in an approved environment"
     ],
     "configuration": [
       "Approved non-secret configuration for the Attendance REST API base URL and adapter runtime"
     ]
   },
   "open_issues_or_blockers": [
-    "Local adapter tests verify the fifteen-tool canonical requester, catalog, administrative, and reporting MCP inventory; route/argument mappings; MCP schemas; contract-version headers; allowed header propagation; Attendance REST API safe-error filtering; local MCP initialization without a REST call; and public liveness.",
-    "The repository-owned migration contract identifies Attendance MCP as the public Streamable HTTP owner and the Attendance REST API as its private authority while preserving MCP contract 1.2.0.",
+    "Local adapter tests verify the sixteen-tool canonical requester, catalog, administrative, and reporting MCP inventory; route/argument mappings; MCP schemas; contract-version headers; allowed header propagation; Attendance REST API safe-error filtering; local MCP initialization without a REST call; and public liveness.",
+    "The repository-owned migration contract identifies Attendance MCP as the public Streamable HTTP owner and the Attendance REST API as its private authority under the pre-release MCP 1.3.0 label.",
     "The local Docker image attendance-mcp:local-test builds successfully from the merged adapter source.",
     "Structured runtime logging is locally verified with development console DEBUG output, non-local JSON INFO output, UTC and callsite metadata, request-scoped trace context, and recursive redaction of configured sensitive keys and values.",
     "Project-owned logging is locally verified: adapter structured events remain development DEBUG or non-local INFO, standard-library external logs default to WARNING, FastMCP follows that policy, Uvicorn retains one INFO access record, and ATTENDANCE_MCP_LOG_EXTERNAL_DEBUG explicitly enables external DEBUG diagnostics.",
     "One private MCP HTTP lifecycle wrapper is locally verified to own tracing, header admission, safe lifecycle outcomes, contract-version response publication, body replay, and lifecycle logging. Public ASGI tests preserve health, safe rejected-header and oversized-body responses, duplicate correlation rejection, allowed forwarding, local initialization, and safe header observability.",
-    "All fifteen read-only MCP tools use a shared internal tool-call policy and their sole Attendance REST API client seam remains unchanged. The policy derives stable value-free handler labels and sanitized input shapes from each typed handler interface, centralizes header forwarding and safe-error translation, and preserves lifecycle timing and outcomes. In-process Streamable HTTP regressions verify requester and reporting tool calls emit safe MCP and Attendance REST API lifecycles and preserve route arguments and allowed headers.",
-    "All fifteen named read-only Attendance REST API client operations locally derive their concrete request path and value-free lifecycle identity from one private immutable operation record. In-process REST-client tests verify each public operation's method, route, stable operation label, and safe route template; the prior reverse route parser is removed.",
-    "The contract-1.3.0 Streamable HTTP catalog is locally verified with fifteen string-described, read-only annotated MCP tools and the compatible requester schema. `resolve_employee` requires exactly one employee_id, username, or email selector and maps to GET /api/v1/employees/resolve through the sole REST-client seam; safe NOT_FOUND forwarding and bearer/correlation propagation are fixture-verified. `get_current_attendance` accepts optional statuses arrays only, rejects empty and duplicate arrays, and maps them to repeated REST status keys; unknown is not advertised. The in-process Teams bot MCP session discovers that catalog using fixture-only transport. Verified with 44 local tests, Ruff lint, and formatting checks.",
+    "All sixteen read-only MCP tools use a shared internal tool-call policy and one Attendance REST API client seam. The policy derives stable value-free handler labels and sanitized input shapes from each typed handler interface, centralizes header forwarding and safe-error translation, and preserves lifecycle timing and outcomes. In-process Streamable HTTP regressions verify requester and reporting tool calls emit safe MCP and Attendance REST API lifecycles and preserve route arguments and allowed headers.",
+    "All sixteen named read-only Attendance REST API client operations locally derive their concrete request path and value-free lifecycle identity from one private immutable operation record. In-process REST-client tests verify each public operation's method, route, stable operation label, and safe route template; the prior reverse route parser is removed.",
+    "The pre-release contract-1.3.0 Streamable HTTP catalog contains sixteen string-described, read-only annotated MCP tools and the compatible requester schema. `get_current_work_status` has no `as_of` or identity selector, accepts optional nonempty unique recognized status arrays and bounded pagination, and maps to GET /api/v1/attendance/current-status with repeated status keys; omission requests all recognized statuses. The legacy `get_current_attendance` retains its detailed schema and route but is explicitly administrator-only under verified REST v1/1.0.0 behavior; non-admin clients must migrate and no authorization compatibility is claimed. Fixture-backed tests verify route mapping, allowed bearer/correlation propagation, safe FORBIDDEN forwarding, and invalid status rejection without upstream calls.",
+    "2026-10-08 pilot source verification under Python 3.14.2: focused Streamable HTTP and REST-client tests (19 passed); uv run pytest -q (47 passed); uv run ruff check . (passed); uv run ruff format --check . (23 files formatted); git diff --check (passed); uv run python JSON state validation (passed).",
+    "Teams must consume get_current_work_status for workforce status before employee pilot traffic; the source-only MCP change does not validate Teams migration, Entra/OBO, REST audit persistence, SQL Server, deployment, privacy approval, or real-account authorization.",
     "No authorized non-production deployment, Entra/OBO, Attendance REST API audit-record comparison, or end-to-end parity evidence exists; local implementation does not clear these external gates."
   ]
 }
