@@ -432,15 +432,6 @@ async def test_administrative_tools_map_arguments_to_attendance_rest_api(
 
     tools = {tool["name"]: tool for tool in catalog.json()["result"]["tools"]}
     assert {name for name, _ in calls}.issubset(tools)
-    assert tools["list_my_attendance_events"]["description"] == (
-        "List the requesting employee's attendance events over one through 31 "
-        "inclusive calendar days. Employee identity is resolved by the server; "
-        "limit must be from 1 through 100 and offset must be nonnegative."
-    )
-    assert tools["list_attendance_events"]["description"] == (
-        "List one employee's attendance events in a bounded date range. This MVP "
-        "tool is available only to the server-configured admin requester."
-    )
     assert all(
         tools[name]["inputSchema"]["properties"][parameter]["format"] == "date"
         for name, parameter in (

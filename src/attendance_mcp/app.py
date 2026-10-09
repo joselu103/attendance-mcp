@@ -45,9 +45,12 @@ def create_app(
         name="list_my_attendance_events",
         annotations={"readOnlyHint": True},
         description=(
-            "List the requesting employee's attendance events over one through 31 "
-            "inclusive calendar days. Employee identity is resolved by the server; "
-            "limit must be from 1 through 100 and offset must be nonnegative."
+            "List the requesting employee's attendance events for explicit inclusive "
+            "Europe/Ljubljana start and end dates with no maximum span; future "
+            "end dates are allowed. Page the complete period using limit (default "
+            "50, from 1 through 100), offset (default 0, nonnegative), and the "
+            "returned next_offset. End must not precede start. Employee identity "
+            "is resolved by the server."
         ),
     )
     @tool_call_policy.instrument
@@ -168,8 +171,12 @@ def create_app(
         name="list_attendance_events",
         annotations={"readOnlyHint": True},
         description=(
-            "List one employee's attendance events in a bounded date range. "
-            "This MVP tool is available only to the server-configured admin requester."
+            "List one employee's attendance events for explicit inclusive "
+            "Europe/Ljubljana start and end dates with no maximum span; future "
+            "end dates are allowed. Page the complete period using limit (default "
+            "50, from 1 through 100), offset (default 0, nonnegative), and the "
+            "returned next_offset. End must not precede start. Available only "
+            "to an administrator authorized by the REST API."
         ),
     )
     @tool_call_policy.instrument
