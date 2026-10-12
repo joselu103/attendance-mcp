@@ -7,6 +7,14 @@ stateless, read-only protocol adapter and publishes the pre-release MCP contract
 label `1.3.0`. `GET /health` is public liveness only; it does not establish readiness
 of the Attendance REST API, identity, audit, database, or MCP services.
 
+The live MCP tool registrations exclusively own authenticated model-selection
+metadata: descriptions, input schemas, parameter guidance, and bilingual
+English (`en`) / Slovenian (`sl`) schema-valid call examples. Consumers must
+discover and use this catalog rather than carry rewritten metadata. This is an
+additive metadata clarification only; the 1.3.0 tool names, input shapes,
+defaults, routes, headers, authorization, safe errors, and REST behavior stay
+compatible.
+
 The Attendance REST API is the private authority behind the adapter. It validates
 the delegated bearer, derives requester identity and employee mapping, applies
 authorization and attendance rules, records audit outcomes, and accesses SQL
@@ -89,9 +97,9 @@ remain REST-owned. Pages read live data and do not promise a snapshot.
 
 Accepting wider history periods is additive under pre-release MCP `1.3.0` and
 REST `1.0.0`. Tool names, input schemas, required dates, defaults, routes, safe
-errors, headers, and response fields remain compatible. Only the two history
-descriptions change; summary, analysis, exceptions, planned-work, and
-current-status policies are unaffected.
+errors, headers, and response fields remain compatible. The executable catalog
+is the source of model-selection metadata; summary, analysis, exceptions,
+planned-work, and current-status behavior is unaffected.
 
 The verified upstream source is the REST owner history-pagination worktree
 (42 focused and 168 full tests under Python 3.14.2). The MCP source handoff

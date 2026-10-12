@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import date, datetime
 from functools import wraps
 from time import perf_counter
-from typing import Literal, ParamSpec, TypeVar, get_args, get_origin
+from typing import Annotated, Literal, ParamSpec, TypeVar, get_args, get_origin
 from uuid import UUID
 
 import structlog
@@ -143,6 +143,8 @@ def _input_shape(operation: Callable[..., object]) -> tuple[str, ...]:
 
 def _annotation_label(annotation: object) -> str:
     origin = get_origin(annotation)
+    if origin is Annotated:
+        return _annotation_label(get_args(annotation)[0])
     if annotation is date:
         return "date"
     if annotation is datetime:

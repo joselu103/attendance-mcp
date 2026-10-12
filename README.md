@@ -14,6 +14,11 @@ with `items` of `first_name`, `last_name`, and `status`, plus `limit`, `offset`,
 and `next_offset`. The REST API evaluates the current Europe/Ljubljana day;
 there is no client-selected time or employee identity.
 
+Attendance MCP owns the authenticated model-selection catalog: each live tool
+registration is the canonical source for its description, input-schema guidance,
+and English (`en`) and Slovenian (`sl`) valid-call examples. Consumers discover
+that metadata after authentication and must not maintain rewritten tool copies.
+
 `get_current_attendance` remains available for administrator-only detailed
 queries and still accepts optional `as_of`, `statuses`, `limit`, and `offset`.
 Non-administrator callers must migrate to `get_current_work_status` and will
