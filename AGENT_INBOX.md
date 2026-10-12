@@ -30,27 +30,34 @@
 
 # Current Directive
 
-> **Status:** Completed locally; downstream and external gates remain.
+> **Directive:** MCP-TOOL-INSTRUCTION-OWNERSHIP-001
 >
-> **Objective:** Add the read-only pilot workforce-status mapping after the
-> verified Attendance REST API source handoff, and retain the detailed current
-> attendance mapping as an administrator-only compatibility path.
+> **Status:** Completed locally; verified MCP handoff ready for Teams.
 >
-> **Contract context:** Map `get_current_work_status(statuses=None, limit=50,
-> offset=0)` to `GET /api/v1/attendance/current-status` without client `as_of` or
-> identity selectors. Keep the pre-release MCP version label `1.3.0` and REST v1
-> `1.0.0`, publish the changed catalog and mandatory non-admin client migration,
-> and preserve delegated bearer/UUID correlation forwarding and safe errors.
+> **Objective:** Make the sixteen current read-only MCP registrations the sole
+> executable owner of model-selection descriptions, parameter guidance, and
+> English/Slovenian schema-valid call examples for authenticated catalog
+> discovery.
 >
-> **Verification:** Focused Streamable HTTP and REST-client tests (19 passed),
-> `uv run pytest -q` (47 passed), `uv run ruff check .`,
-> `uv run ruff format --check .` (23 files formatted), `git diff --check`, and
-> JSON state validation passed under Python 3.14.2.
+> **Contract context:** Base is MCP `11b9d55`; do not absorb independent
+> period-mode work. Keep pre-release MCP `1.3.0`; tool names, input shapes,
+> defaults, routes, headers, REST authorization, safe errors, and REST behavior
+> are unchanged. History metadata continues to require explicit inclusive
+> Europe/Ljubljana start/end dates, no maximum span, future ends, and limit/
+> offset/`next_offset`; it does not claim relative or end-only queries.
 >
-> **Definition of done:** Sixteen read-only tools include the new category-only
-> route and an explicitly administrator-only detailed tool; route arguments,
-> headers, validation, and safe failures are locally verified. Teams migration
-> and cross-service activation remain separate gates.
+> **Verification:** Black-box catalog/transport coverage validates every live
+> English and Slovenian example against its published JSON Schema, invokes all
+> sixteen through Streamable HTTP, and verifies allowed forwarding. Focused
+> catalog/history tests passed (12); `uv run pytest -q` passed (58); `uv run
+> ruff check .`, `uv run ruff format --check .` (24 files), JSON validation,
+> and `git diff --check` passed under Python 3.14.2.
+>
+> **Definition of done:** Completed. Teams may authenticate attendance requests,
+> discover/admit the live catalog, and pass its metadata to model selection
+> without local rewrites. Deployment, Entra/OBO, REST authorization/audit,
+> SQL Server, provider/privacy, signing-key, and real-account evidence remain
+> external gates.
 
 ## Prior Directive
 

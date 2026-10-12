@@ -1,5 +1,6 @@
 import httpx
 import pytest
+from jsonschema import Draft202012Validator
 
 from attendance_mcp.app import create_app
 from attendance_mcp.settings import Settings
@@ -272,6 +273,76 @@ async def test_catalog_admits_every_read_only_tool_for_the_teams_bot(
         "limit",
         "offset",
     }
+
+
+@pytest.mark.asyncio
+async def test_catalog_metadata_examples_are_schema_valid_and_forward_safely(
+    app, upstream_requests
+) -> None:
+    """Exercise canonical catalog examples through the public MCP transport."""
+    async with (
+        app.router.lifespan_context(app),
+        httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://mcp.example"
+        ) as client,
+    ):
+        await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "catalog-test", "version": "1"},
+                },
+            },
+        )
+        catalog = await client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        )
+        tools = {tool["name"]: tool for tool in catalog.json()["result"]["tools"]}
+        responses = []
+        for request_id, (name, tool) in enumerate(tools.items(), start=3):
+            assert tool["description"]
+            assert all(
+                property_schema["description"] and property_schema["examples"]
+                for property_schema in tool["inputSchema"]["properties"].values()
+            )
+            examples = tool["_meta"]["examples"]
+            assert [example["language"] for example in examples] == ["en", "sl"]
+            for example in examples:
+                Draft202012Validator(tool["inputSchema"]).validate(example["arguments"])
+            responses.append(
+                await client.post(
+                    "/mcp",
+                    headers=HEADERS | {"X-Unapproved": "discard-me"},
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "method": "tools/call",
+                        "params": {
+                            "name": name,
+                            "arguments": examples[0]["arguments"],
+                        },
+                    },
+                )
+            )
+
+    assert all(
+        response.json()["result"].get("isError") is not True for response in responses
+    )
+    assert len(upstream_requests) == 16
+    assert all(
+        request.headers["authorization"] == HEADERS["Authorization"]
+        and request.headers["x-correlation-id"] == HEADERS["X-Correlation-ID"]
+        and "x-unapproved" not in request.headers
+        for request in upstream_requests
+    )
 
 
 @pytest.mark.asyncio
