@@ -185,3 +185,34 @@ done, and evidence-backed `AGENT_STATE.json` update.
   remain exclusively in the Attendance REST API.
 - All product tools are read-only until a separately approved contract changes
   that scope.
+
+# Current Directive
+
+> **Directive:** ATTENDANCE-LOG-DURATION-TOTALS-001
+>
+> **Status:** Completed locally; verified MCP handoff ready for Teams.
+>
+> **Objective:** Transparently forward REST-owned history duration fields and
+> summaries through both history tools, update only their selection descriptions,
+> and document the verified contract and downstream readiness.
+>
+> **Contract:** REST source prerequisite is verified in
+> `/home/joselu/orca/workspaces/attendance-crmt/log-duration-totals` with REST
+> `1.0.0`; keep MCP `1.3.0`, package `0.1.0`, input schemas/defaults, routes,
+> generic dictionary outputs, headers, and REST-owned authorization/errors.
+> History items alone gain nullable `duration_minutes`; roots include page and
+> full-period totals. MCP must preserve all fields and scalar types unchanged.
+>
+> **Verification:** Official MCP SDK transport tests cover both tools, positive,
+> zero, and null durations, intermediate/final/empty/beyond-last pages, changing
+> live period totals, exact complete-period GETs, and allowed headers. Run focused
+> and full pytest, Ruff check/format, state JSON validation, and diff check from a
+> synthetic environment without dotenv, secrets, or real data.
+>
+> **Definition of done:** Completed. Only the two history registration
+> descriptions changed in source. README, migration contract, integration
+> guidance, state, handoff, and this inbox record the verified contract and
+> downstream readiness. Deployment, identity, audit, SQL Server,
+> provider/privacy, and real-account gates remain unresolved. No external
+> changes, commits, pushes, PRs, merges, deployments, secrets, or real
+> attendance data were used.

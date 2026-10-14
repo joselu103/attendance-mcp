@@ -93,26 +93,38 @@ business validation, authorization decision, or automatic page aggregation.
 
 Each call forwards the original complete dates and one `limit`/`offset` pair
 once. Default limit is 50, supported limits are 1–100, and offset defaults to 0
-and must be nonnegative. REST's `items`, `limit`, `offset`, and `next_offset`
-envelope is unchanged; follow a non-null `next_offset` with the same dates and
-target. Final and empty pages have null `next_offset`. Ordering and lookahead
-remain REST-owned. Pages read live data and do not promise a snapshot.
+and must be nonnegative. REST selects completed overlaps and active events
+starting before the period ends, while preserving eligible in-range anomalies.
+Ordering and lookahead remain REST-owned. Follow a non-null `next_offset` with
+the same dates and target. Final and empty pages have null `next_offset`. Pages
+read live data and do not promise a snapshot.
 
-Accepting wider history periods is additive under pre-release MCP `1.3.0` and
-REST `1.0.0`. Tool names, input schemas, required dates, defaults, routes, safe
-errors, headers, and response fields remain compatible. The executable catalog
-is the source of model-selection metadata; summary, analysis, exceptions,
+History items alone include nullable `duration_minutes`, the full-event UTC
+elapsed duration truncated to whole minutes; unavailable or reversed intervals
+are null and zero-length intervals are zero. The root `summary` contains
+`page_duration_minutes`, the sum of non-null returned-item durations, and
+`period_duration_minutes`, REST's unpaged sum of valid completed overlaps
+clipped to the inclusive-date half-open period and truncated per contribution.
+Overlaps count independently; empty totals are zero. MCP forwards every field
+and value unchanged and does not calculate or accumulate totals. Each live page
+can report a changed period total. Other event representations do not gain these
+history-only fields.
+
+Wider history periods and the approved history response additions remain under
+pre-release MCP `1.3.0` and REST `1.0.0`. Tool names, input schemas, required
+dates, defaults, routes, safe errors, and headers are unchanged; history
+response fields have the additions described above. The executable catalog is
+the source of model-selection metadata; summary, analysis, exceptions,
 planned-work, and current-status behavior is unaffected.
 
-The verified upstream source is the REST owner history-pagination worktree
-(42 focused and 168 full tests under Python 3.14.2). The MCP source handoff
-permits Teams implementation against those unchanged interfaces: request one
-complete-period page, retain dates and the resolved administrator target for
-continuation, and use the requester tool without an employee selector for
-personal history. Teams owns signed button continuation and must remove its
-history span/page caps and window aggregation. Teams verification remains
-pending; source readiness clears no deployment, Entra/OBO, audit persistence,
-SQL Server, provider/privacy, signing-key provisioning, or real-account gate.
+The verified REST owner handoff is at
+`attendance-crmt/log-duration-totals/docs/issues/ATTENDANCE-LOG-DURATION-TOTALS-001-handoff.md`.
+The MCP transport preserves the fields for both tools, including nullable and
+zero values, live period-total changes, empty and beyond-last pages, complete
+dates, and allow-listed headers. Teams may validate and render this verified
+contract directly; it should use each page's REST total without accumulation.
+No deployment, Entra/OBO, audit persistence, SQL Server, provider/privacy,
+signing-key provisioning, or real-account gate is cleared.
 
 ## Verification boundary
 
