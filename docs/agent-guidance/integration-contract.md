@@ -33,6 +33,16 @@ contract `1.3.0`. The pilot adds the read-only workforce tool while keeping the
 pre-release contract label `1.3.0` until an actual release. This does not promise
 authorization compatibility for non-administrative callers of the detailed tool.
 
+For `list_my_attendance_events` and administrator-only
+`list_attendance_events`, REST selects overlapping history events and returns
+nullable whole-event UTC-elapsed `duration_minutes` on history items. Its root
+`summary` reports the returned page's non-null duration sum and the unpaged
+period total for valid completed overlaps clipped to the full inclusive-date
+period. MCP forwards the dictionary unchanged: it does not validate or compute
+metrics, and a live period total can change between page requests. Other event
+representations do not gain these history-only fields. MCP `1.3.0` and REST
+`1.0.0`, schemas, defaults, routes, and safe-error authority remain unchanged.
+
 For every protected REST request, forward exactly one delegated `Authorization`
 bearing the Attendance token and exactly one UUID `X-Correlation-ID`. Forward no
 other caller-controlled headers. The adapter neither creates a second OBO exchange

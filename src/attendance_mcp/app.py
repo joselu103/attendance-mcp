@@ -138,7 +138,9 @@ def create_app(
             "end dates are allowed. Page the complete period using limit (default "
             "50, from 1 through 100), offset (default 0, nonnegative), and the "
             "returned next_offset. End must not precede start. Employee identity "
-            "is resolved by the server."
+            "is resolved by the server. REST includes overlapping events and "
+            "owns nullable whole-event duration_minutes plus page and clipped "
+            "full-period duration totals in the response summary."
         ),
         meta=_tool_metadata(
             english={"start_date": "2026-08-01", "end_date": "2026-08-31"},
@@ -280,7 +282,10 @@ def create_app(
             "end dates are allowed. Page the complete period using limit (default "
             "50, from 1 through 100), offset (default 0, nonnegative), and the "
             "returned next_offset. End must not precede start. Available only "
-            "to an administrator authorized by the REST API."
+            "to an administrator authorized by the REST API. REST includes "
+            "overlapping events and owns nullable whole-event duration_minutes "
+            "plus page and clipped full-period duration totals in the response "
+            "summary."
         ),
         meta=_tool_metadata(
             english={
