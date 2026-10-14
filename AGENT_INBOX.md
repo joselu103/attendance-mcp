@@ -1,3 +1,35 @@
+# Directive: ATTENDANCE-WORK-STATUS-METADATA-CLARIFICATION-001
+
+> **Status:** Completed locally.
+>
+> **Objective:** Clarify the registered `get_current_work_status` description
+> and its directly affected canonical README, migration, and integration
+> contract documentation. Add focused public-catalog assertions based on live
+> `tools/list` metadata.
+>
+> **Contract:** Describe this as the read-only workforce query for who is
+> working and where today at server-derived Europe/Ljubljana time. Define the
+> six statuses (`office`, `remote`, `customer_site`, `break`, `absence`, and
+> `no_status` meaning no registered attendance status); state that optional
+> `statuses` accepts a unique nonempty union and omission returns all recognized
+> categories; state results expose only first_name, last_name, status, and
+> pagination. Preserve tool name, schema, examples, handler, REST mapping,
+> authorization, errors, version labels, and unrelated logic/formats. Teams
+> forwards live catalog descriptions unchanged, so no Teams source change.
+>
+> **Verification:** Focused public catalog test, full `uv run pytest -q`,
+> `uv run ruff check .`, `uv run ruff format --check .`, state JSON validation,
+> and `git diff --check` after final edits.
+>
+> **Definition of done:** Completed. Approved wording is represented in live
+> tool metadata and canonical docs; public catalog assertions check semantic
+> content without exact prose equality. Focused catalog test (1 passed), full
+> pytest (58 passed), Ruff check and format (24 files), state JSON validation,
+> and diff check passed under Python 3.14.2. No secrets/data, external changes,
+> commit, push, or deployment.
+
+## Historical completed directive
+
 # Directive: ATTENDANCE-HISTORY-PAGINATION-001
 
 > **Status:** Completed repository-owned MCP slice; Teams source ready.

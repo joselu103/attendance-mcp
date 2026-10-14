@@ -402,9 +402,12 @@ def create_app(
     @mcp.tool(
         name="get_current_work_status",
         description=(
-            "List today's current workforce status categories at server-derived "
-            "Europe/Ljubljana time for any mapped delegated employee. Results contain "
-            "only first_name, last_name, status, and pagination; no event details."
+            "Read-only workforce query for who is working and where today at "
+            "server-derived Europe/Ljubljana time. Statuses are office, remote, "
+            "customer_site, break, absence, or no_status (no registered attendance "
+            "status). Optional statuses selects a unique nonempty union; omission "
+            "returns all recognized categories. Results expose only first_name, "
+            "last_name, status, and pagination."
         ),
         annotations={"readOnlyHint": True},
         meta=_tool_metadata(

@@ -17,11 +17,13 @@ means all recognized statuses, while empty and duplicate arrays are invalid.
 For the pilot workforce view, `get_current_work_status` maps to
 `GET /api/v1/attendance/current-status` and accepts only optional `statuses`
 (the same six recognized values), `limit=50`, and `offset=0`. It has no `as_of`
-or identity selector. The REST API samples current Europe/Ljubljana time,
-authorizes any mapped delegated employee, and returns only paginated
-`first_name`, `last_name`, and `status` rows. Omitted statuses request all
-recognized categories; a supplied nonempty, unique array forwards as repeated
-REST `status` keys. REST owns bounds and business rules. The old
+or identity selector. This is the read-only workforce query for who is working
+and where today at server-derived Europe/Ljubljana time. `no_status` means no
+registered attendance status. The REST API authorizes any mapped delegated
+employee and returns only paginated `first_name`, `last_name`, and `status`
+rows. Omitted statuses request all recognized categories; a supplied
+nonempty, unique array selects their union and forwards as repeated REST
+`status` keys. REST owns bounds and business rules. The old
 `get_current_attendance` maps unchanged to the detailed REST route but is now
 administrator-only; ordinary employee clients must migrate to
 `get_current_work_status` and must not rely on the old tool's former access.
