@@ -32,12 +32,19 @@ Europe/Ljubljana dates without a maximum span, including future end dates.
 Each call forwards the complete period once and returns one REST page unchanged.
 Follow `next_offset` with the same dates and target; final and empty pages have
 null `next_offset`. REST requires end >= start, limit 1–100, and offset >= 0.
-Pages read live data with no snapshot guarantee. Wider periods are additive;
-MCP pre-release `1.3.0` and REST `1.0.0` schemas/defaults are unchanged.
+REST selects overlapping events, including active events that started before
+the period, and computes the history metrics. Each history item has nullable
+`duration_minutes` for its full UTC-elapsed event duration; the root `summary`
+contains `page_duration_minutes` for returned items and
+`period_duration_minutes` for valid completed events clipped to the full
+requested period. MCP forwards these fields unchanged, including null and zero.
+Pages read live data with no snapshot guarantee, so period totals can change
+between pages. MCP pre-release `1.3.0`, REST `1.0.0`, and input schemas/defaults
+remain unchanged.
 
-Teams source implementation may now consume complete-period pages against the
-verified REST and MCP history-pagination worktrees. Teams must remove history
-window splitting/aggregation and provide user-controlled continuation. This
+Teams may consume the verified duration fields directly from the live MCP
+catalog and render the per-event and full-period totals. It must request one
+complete-period page at a time and use the current API total on each page. This
 handoff does not establish deployed end-to-end readiness; unrelated report,
 summary, planned-work, and current-status rules retain their existing scope.
 
