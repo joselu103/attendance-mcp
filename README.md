@@ -7,12 +7,14 @@ authorization, attendance rules, audit, and SQL Server access.
 
 The pilot MCP catalog contains sixteen read-only tools under the pre-release
 contract label `1.3.0`. For current workforce status, use
-`get_current_work_status(statuses=None, limit=50, offset=0)`. Its optional
-`statuses` array accepts `office`, `remote`, `customer_site`, `break`,
-`absence`, or `no_status`; omit it for all categories. The response is a page
-with `items` of `first_name`, `last_name`, and `status`, plus `limit`, `offset`,
-and `next_offset`. The REST API evaluates the current Europe/Ljubljana day;
-there is no client-selected time or employee identity.
+`get_current_work_status(statuses=None, limit=50, offset=0)`, the read-only
+workforce query for who is working and where today at server-derived
+Europe/Ljubljana time. Its optional `statuses` array accepts a unique nonempty
+union of `office`, `remote`, `customer_site`, `break`, `absence`, and
+`no_status` (no registered attendance status); omit it for all recognized
+categories. The response is a page with `items` of `first_name`, `last_name`,
+and `status`, plus `limit`, `offset`, and `next_offset`. There is no
+client-selected time or employee identity.
 
 Attendance MCP owns the authenticated model-selection catalog: each live tool
 registration is the canonical source for its description, input-schema guidance,

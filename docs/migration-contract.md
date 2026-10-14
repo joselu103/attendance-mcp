@@ -60,15 +60,18 @@ and `offset` and maps to `GET /api/v1/attendance/current`. The REST API now
 returns safe `FORBIDDEN` to non-administrators. MCP does not infer roles or hide
 this tool based on caller identity.
 
-The pilot `get_current_work_status` tool accepts optional `statuses` from the
-same six values, `limit=50`, and `offset=0`. It has no `as_of` or employee
-selector. The adapter rejects empty or duplicate status arrays and forwards a
-valid array as repeated REST `status` query keys to
-`GET /api/v1/attendance/current-status`. The REST API samples the current
-Europe/Ljubljana day and returns a page with `items` containing only
-`first_name`, `last_name`, and `status`, plus `limit`, `offset`, and
-`next_offset`. REST validates pagination, authorization, and status semantics;
-MCP forwards only the safe result or safe error.
+The pilot `get_current_work_status` tool is the read-only workforce query for
+who is working and where today at server-derived Europe/Ljubljana time. It
+accepts optional `statuses` from the same six values (`no_status` means no
+registered attendance status), `limit=50`, and `offset=0`; its `statuses` array
+must be a unique nonempty union when supplied, while omission returns all
+recognized categories. It has no `as_of` or employee selector. The adapter
+rejects empty or duplicate status arrays and forwards a valid array as repeated
+REST `status` query keys to `GET /api/v1/attendance/current-status`. The REST
+API samples the current Europe/Ljubljana day and returns a page with `items`
+containing only `first_name`, `last_name`, and `status`, plus `limit`, `offset`,
+and `next_offset`. REST validates pagination, authorization, and status
+semantics; MCP forwards only the safe result or safe error.
 
 Teams and other ordinary employee clients must discover and call
 `get_current_work_status` for workforce status before pilot use. The prior

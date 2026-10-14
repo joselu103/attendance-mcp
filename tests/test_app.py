@@ -969,6 +969,28 @@ async def test_current_work_status_catalog_and_invalid_filters(
     tools = {tool["name"]: tool for tool in listed.json()["result"]["tools"]}
     pilot_tool = tools["get_current_work_status"]
     assert pilot_tool["annotations"] == {"readOnlyHint": True}
+    description = " ".join(pilot_tool["description"].lower().split())
+    assert "read-only" in description
+    assert "who is working and where today" in description
+    assert "server-derived europe/ljubljana time" in description
+    assert all(
+        status in description
+        for status in (
+            "office",
+            "remote",
+            "customer_site",
+            "break",
+            "absence",
+            "no_status",
+        )
+    )
+    assert "no registered attendance status" in description
+    assert "unique nonempty union" in description
+    assert "omission returns all recognized categories" in description
+    assert all(
+        field in description
+        for field in ("first_name", "last_name", "status", "pagination")
+    )
     assert set(pilot_tool["inputSchema"]["properties"]) == {
         "statuses",
         "limit",
