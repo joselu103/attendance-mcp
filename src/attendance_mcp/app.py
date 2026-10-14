@@ -408,11 +408,21 @@ def create_app(
         name="get_current_work_status",
         description=(
             "Read-only workforce query for who is working and where today at "
-            "server-derived Europe/Ljubljana time. Statuses are office, remote, "
-            "customer_site, break, absence, or no_status (no registered attendance "
-            "status). Optional statuses selects a unique nonempty union; omission "
-            "returns all recognized categories. Results expose only first_name, "
-            "last_name, status, and pagination."
+            "server-derived Europe/Ljubljana time. "
+            "Statuses parameters MUST be an array containing one or more of the "
+            "following valid values ONLY:\n"
+            "- 'office' (use for office, in-person, on-site at main location)\n"
+            "- 'remote' (use for at home, working from home, WFH, remote, home "
+            "office, and similar)\n"
+            "- 'customer_site' (use for client visit, external site, at the client's)\n"
+            "- 'break'\n"
+            "- 'absence'\n"
+            "- 'no_status'\n\n"
+            "CRITICAL BEHAVIOR FOR GENERAL QUERIES:\n"
+            "- When the user asks a general working question (e.g., 'who is working today?')"
+            " without specifying a location, you MUST explicitly "
+            "pass `statuses=['office', 'remote', 'customer_site']` to retrieve only active workers "
+            "and exclude absences, breaks, or inactive statuses."
         ),
         annotations={"readOnlyHint": True},
         meta=_tool_metadata(
